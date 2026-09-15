@@ -1,0 +1,208 @@
+# TC002 port validation
+
+Latest validated candidate: **1.1.0-tc002.3**, with 103 passing pytest cases and
+one passing hardware CTest. The sections below record successive validation
+rounds; earlier version numbers and test counts describe those earlier rounds.
+Paths under `device-private/` and `dist/` refer to local evidence and artifacts
+that are not included in the public repository.
+
+Upstream: AWTRIX NG 1.1.0, commit `4ff1de83428ed13cae6e210dfcbf9d186a09bc60`.
+Device: TC002 stock app 1.1.1, MCU V1.0.17, ARMv7 SSD202D, glibc 2.30.
+Validation date: 2026-09-15. Permanent installation and startup after Linux reboot passed.
+
+## Permanent installation
+
+- Installed `update.img` SHA-256
+  `82eb8251acbea8194ad56311c45573b8eb26667513e7ab8520d817aeee5ee2dd`.
+- The updater wrote the res partition and verified every erase block by read-back,
+  then rebooted Linux. Its successful completion is recorded privately in
+  `device-private/installation-success.log`.
+- After reboot, Linux uptime was 201 seconds and the process ran directly from
+  `/res/bin/awtrix-tc002`, with persistent settings under `/data/awtrix-ng`.
+  The API reported version 1.1.0-tc002.1, 42 FPS and roughly 16 MiB available RAM.
+  Wi-Fi reconnected and NTP synchronized. The web service listens on port 80.
+- Browser checks against the installed firmware passed: no JavaScript errors,
+  52 × 16 preview and the correct fixed-matrix controls. Screenshot:
+  `dist/webui-installed.png`.
+- Initial install attempts safely aborted before erasing because the stock
+  `/res/bin/hciattach` Bluetooth helper kept `/res` busy. The updater now waits
+  for GUI shutdown, sends the helper SIGTERM, waits two seconds and uses SIGKILL
+  only if the same PID still runs that exact executable. A no-write diagnostic
+  unmount/remount passed before the final installation.
+- MQTT is disabled until a broker is configured in the web UI.
+
+## Confirmed on the physical clock
+
+- Full AWTRIX app: correct, steady 52 × 16 color bands and border, confirmed by owner.
+- GPIO 35 direction low/high, 1 ms before and after SPI write, 15 ms idle.
+  SPI mode 0, 8 bits, MSB first, 10 MHz; RGB rows padded to 64 pixels (3072 bytes).
+- Normal application maintains approximately 42 FPS; final RAM trial reported
+  about 14 MiB available memory. Stock and AWTRIX never own the display together.
+- Two sets of three rising RTTTL notes, clearly heard by owner.
+- Generated stereo MP3 and HTTP MP3 stream: playback stayed active for the clip
+  duration and completed without errors at zero volume. A shared-speaker stop-scope
+  bug found by this check was fixed and the check passed afterward.
+- Left/right buttons and rotary navigation both work, confirmed by owner.
+- MCU battery percentage and reported millivolts, live Wi-Fi status and scan results.
+- HTTPS status 200 with certificate verification, using statically linked OpenSSL
+  3.5.8 and the public Mozilla CA bundle. Stock OpenSSL 1.1.0i could not negotiate
+  TLS 1.2 and is not used for AWTRIX HTTPS.
+- mDNS service response includes the correct hostname, UID and web port.
+- NTP synchronization logged during the final launcher trial.
+- 21 ARM integration cases passed: MQTT topics/replies, retained state, Home
+  Assistant discovery, pushed apps, notifications, settings, display, audio
+  command validation, silent unknown topics and fixed-wiring rejection.
+- Web dashboard and System page pass browser checks: 520 × 160 preview,
+  52 × 16 = 832 fixed-matrix badge, no ESP32 GPIO controls, no JavaScript errors.
+- Streaming update endpoint rejects an invalid image with HTTP 422; no writes.
+- Actual FlyThings launcher tested from a temporary bundle with the final app,
+  TLS and descriptor cleanup. Stock is restored after each bounded trial.
+
+- Update helper preflight passed on the real 8 MiB NOR res partition, with no writes.
+
+## Local checks
+
+- Complete local pytest suite: 62 passed; CTest: 1 passed.
+
+- CTest hardware packing/parser test: passed.
+- Firmware-image tests: 38 passed, including the independent native validator.
+- Host transport tests: Art-Net fills all five universes / 832 pixels; platform
+  capabilities are correct; HTTP authentication survives configuration restart.
+- Original stock image reconstructs byte for byte. Both generated images pass
+  native container validation. Image checks cover CRC, MD5, target, exact length,
+  truncation and filesystem bounds.
+- Final updater links only root-filesystem runtime libraries. It is copied to
+  /tmp before use, validates before stopping the GUI, requires /res to unmount,
+  and reads back each flash erase block before continuing.
+
+## Remaining release validation
+
+- Physical power-cycle startup and restoring the stock recovery image have not
+  been exercised. Installation and automatic startup after Linux reboot passed.
+- Wi-Fi credential changes, static addressing and fallback access-point mode are
+  implemented but untested physically; tests preserved the owner's connection.
+- A real external radio station, playlist and live ICY metadata have not been
+  verified end to end. Local HTTP MP3 streaming and HTTPS transport pass separately.
+- Long-running stability and battery-powered operation have not been soak-tested.
+
+## Intentional platform differences
+
+- Fixed matrix and GPIO mapping; mirror/rotate and button swapping remain available.
+- No ambient-light, temperature or humidity sensor; manual brightness is used.
+- Knob rotation maps to previous/next app; pressing it maps to select.
+- Sleep blanks the panel and pauses services, then restarts the app. It is not
+  hardware deep sleep. Device reboot restarts AWTRIX's process.
+- Firmware update images replace only res, preserving Linux, bootloader and MCU.
+
+## Display diagnosis
+
+Changing transfer timing alone did not fix corruption. An isolated test using
+installed Ulanzi SpiHelper/GpioHelper worked with the same packed pixels.
+Tracing showed GPIO direction writes and SPI setup/readback order differences.
+Matching both fixed the full application. The individual cause was not isolated;
+preserve the user-confirmed sequence.
+
+## RAM test housekeeping
+
+Old temporary test binaries initially consumed almost 7 MiB of RAM filesystem.
+A large TLS diagnostic upload then prevented new ADB shell processes. Truncating
+that diagnostic through ADB sync freed memory, and removing the obsolete test
+copies restored /tmp to about 0.3 MiB. Trial tools now remove their binaries when
+finished. The firmware update handler streams uploads to avoid duplicate bodies.
+
+
+## 2026-09-15: display scaling correction (1.1.0-tc002.2)
+
+The original port changed the physical matrix geometry but left upstream built-in
+layouts, notification fonts, page/script icon buffers and the GIF decoder at
+32 × 8 / 8 × 8. The icons page/editor also still advertised legacy sizes.
+
+Changes:
+
+- Fit built-in layouts to 52 × 16; extend the source frame for long date/time
+  formats before fitting. Keep Berry canvases and explicit draw commands native.
+- Expand both notification/pushed-app fonts 2×, including Unicode glyphs and
+  metrics used by centring and scrolling. Reserve each icon's actual width.
+- Decode GIFs/JPEGs through 52 × 16, including animated/full-screen and inline
+  assets. Enlarge legacy page icons automatically; retain native script sizes.
+  Grow GIF LZW scratch to the standard 4096 entries.
+- Fix progress placement/thickness, indicator/link-dot size, long/dense bar chart
+  coverage, boot/provisioning presentation and the fixed-size LookingEyes effect.
+- Update icon upload limits, both UI languages, editor presets/default, live editor
+  bitmap conversion and initial dashboard aspect ratio. Reject oversized uploads
+  in the browser; preserve pixel edges during conversion.
+
+Validation before installation:
+
+- 85 pytest cases passed (23 new pixel regressions) and the hardware CTest passed.
+- Real Chrome: PNG→GIF upload and display at 16 × 16 and 52 × 16; inline 52 × 16
+  JPEG last pixel; oversized image rejection; matching still previews for legacy
+  and native icon sizes; no page JavaScript errors.
+- Actual hosted Piskel runtime confirmed presets 16x16/52x16/8x8/32x8 and a 16 × 16
+  default canvas. The live dashboard canvas is 520 × 160 with a 52:16 aspect ratio.
+- ARM build and host/native image validation passed. Device preflight verified
+  the matching 8 MiB NOR res partition without writing.
+- Previous AWTRIX image saved as device-private/installed-tc002.1.img; current user
+  configuration backed up in device-private/pre-scaling-data. Stock recovery image
+  remains byte-identical (SHA256 8d66b54a594c9a173ebf8a0267dbc4bb71d8ffdbcae075c52ea5a4ad651cafb3).
+
+Scaling policy and the physical-coordinate script/draw distinction are documented
+in README.md. MQTT topics, schemas and explicit pixel coordinates are unchanged.
+
+Post-installation verification:
+
+- Installed update SHA256 01fc60edf73cf25d96fb89ac7a1298c71c4f62d5ab59c88a962eecb9cf498dd4
+  (4,371,004 bytes). Updater reported every flash block read-back verified and
+  rebooted Linux. `/proc/uptime` was 120 seconds during the post-install check.
+- Version 1.1.0-tc002.2 starts from `/res`, reports 42 FPS, and reconnects to the
+  owner's existing MQTT broker and NTP. Both persistent configuration files are
+  byte-identical to their pre-update backups.
+- Installed ARM renderer: every pixel matched expected results for 8 × 8→16 × 16,
+  native 16 × 16 and full 52 × 16 GIF icons; notification glyph height/centring and
+  Time/Date/Battery full-height layouts verified through the live screen endpoint.
+- Real browser verified the served updated icons/editor UI and 52:16 preview.
+  Screenshot: dist/webui-installed.png. Live pixel captures:
+  device-private/scaling-live-screens.json.
+- These are device framebuffer checks, not a new owner confirmation of the physical
+  panel appearance. The previously owner-confirmed GPIO/SPI driver is unchanged.
+
+
+## 2026-09-15: approved native clock/date/battery layouts (1.1.0-tc002.3)
+
+The owner reviewed interactive previews and approved all three before implementation.
+The final clock adjustments were: calendar rows 3–4 white (two red header rows),
+day number up one row, time left one column, and weekday indicators left one column.
+The day number remains horizontally centred; its temporary left shift was reverted.
+
+Added Tc002Layout native rendering through an optional IApp renderNative hook.
+The three approved layouts bypass the fractional 32→52 framebuffer stretch; other
+built-ins and unsupported alternate formats retain the previous path. Existing
+settings, date formatting, separator effects, weekday colours and battery alarms
+still apply. No MQTT topics or schemas changed.
+
+Validation before installation:
+
+- Frozen 18 expected frames directly from the approved browser previews: four
+  clock/day combinations, four dates (including leap day), and ten charge levels
+  spanning 0%, 100% and the red/amber/green boundaries.
+- The actual C++ built-in renderers match every pixel of all 18 approved frames.
+- All 103 pytest cases passed, including MQTT/HTTP, native drawing/script geometry,
+  decoder limits and image validation. The hardware CTest also passed.
+- Previous installed image saved as device-private/installed-tc002.2.img.
+  Current settings/assets backed up under device-private/pre-approved-layouts-data.
+
+Post-installation verification:
+
+- Installed 1.1.0-tc002.3; update SHA256
+  2c103ee4c5e1c25d97329137059e08d252e616adc9c9aec0541fa6a757c2e83d
+  (4,371,004 bytes). Every flash block read-back verified; Linux reboot completed.
+- Live installed Time, Date and Battery framebuffers match the deterministic C++
+  renderers verified against the approved browser previews. The clock's pulsing
+  colon was checked separately for consistent colour and placement.
+- 42 FPS, MQTT connected, NTP synchronized; both device.json and settings.json are
+  byte-identical to the backups made before installation.
+- Verification restored the previous active app; it did not change persistent
+  settings. Captures: device-private/approved-layouts-live.json.
+- Clock/calendar modes 0–4 use native layouts when the text fits. Big/binary modes
+  and date formats wider than 52 physical pixels retain the previous fitted path.
+  The physical GPIO/SPI driver, web UI, scripts and MQTT contract are unchanged.

@@ -1,0 +1,14 @@
+/build*/
+/dist/
+/.venv/
+/.pytest_cache/
+**/__pycache__/
+**/.pio/
+/simdata/
+/device-private/
+/debug_photos/
+/.agents/
+/.codex/
+**/node_modules/
+.env
+.env.*

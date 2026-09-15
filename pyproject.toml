@@ -1,0 +1,12 @@
+[project]
+name = "awtrix-tc002-tools"
+version = "0.1.0"
+description = "Build, test and device tools for the AWTRIX NG TC002 port"
+requires-python = ">=3.11"
+dependencies = ["paho-mqtt==2.1.0"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "amqtt>=0.11,<0.12", "cmake>=3.20", "ninja>=1.11", "playwright>=1.50,<2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
