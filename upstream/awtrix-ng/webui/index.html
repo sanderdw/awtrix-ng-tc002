@@ -1321,6 +1321,13 @@ const S={transitions:[],stats:null,ap:false,sysHost:'',sysUid:'',gpio:null,aud:n
   scriptMax:0,scriptsOff:null};
 function readAudioCaps(caps){
   S.matrix=caps.matrix||null;
+  if(caps.gpio?.soc==='ssd202d'){
+    for(const key of ['autoBrightness','useCelsius','temperatureColor','humidityColor'])
+      FIELDS[key].g='hidden';
+    for(const key of ['minBrightness','maxBrightness','tempDecimals','buttonCallback'])
+      SYSF[key].g='hidden';
+    FIELDS.brightness.h='Sets the display brightness.|Stellt die Display-Helligkeit ein.';
+  }
   const a=caps.audio||{};
   S.aud={buzzer:a.buzzer===true,track:a.track===true,mp3:a.mp3===true,radio:a.radio===true};
 }
