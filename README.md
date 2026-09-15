@@ -17,7 +17,7 @@ Explore the [original project](https://github.com/Blueforcer/awtrix-ng), read th
 Blueforcer a star if you enjoy this port. This is an independent, unofficial TC002
 adaptation, maintained here; it is not an official Blueforcer or Ulanzi release.
 
-![Clock, date and battery layouts captured from the TC002 framebuffer](docs/assets/native-layouts.png)
+![TC002](docs/tc002.jpg)
 
 ## MQTT compatibility
 
