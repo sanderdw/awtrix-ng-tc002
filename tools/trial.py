@@ -34,7 +34,9 @@ with tempfile.TemporaryDirectory() as tmp:
         (Path('upstream/awtrix-ng/webui/index.html'),'/tmp/awtrix-trial.html'),
         (Path('assets/cacert.pem'),'/tmp/awtrix-cacert.pem')]:
         device('push',str(source),target)
-log=open('/tmp/awtrix-trial-host.log','w')
+device('shell','chmod 700 /tmp/awtrix-trial-bin')
+log_path=Path(tempfile.gettempdir())/'awtrix-trial-host.log'
+log=open(log_path,'w')
 command="trap 'setprop ctl.start zkswe' EXIT; setprop ctl.stop zkswe; " \
     "AWTRIX_CA_CERT=/tmp/awtrix-cacert.pem /tmp/awtrix-trial-bin --hardware --no-matrix " \
     "--data /tmp/awtrix-trial-data --webui /tmp/awtrix-trial.html --port 18081 " \
@@ -48,7 +50,7 @@ try:
                 state=json.load(response)
             break
         except OSError:
-            if process.poll() is not None: raise RuntimeError('app exited; inspect /tmp/awtrix-trial-host.log')
+            if process.poll() is not None: raise RuntimeError(f'app exited; inspect {log_path}')
             time.sleep(.2)
     else: raise RuntimeError('web API did not become ready')
     print(f'Trial ready: {url}, {a.seconds} seconds',flush=True)

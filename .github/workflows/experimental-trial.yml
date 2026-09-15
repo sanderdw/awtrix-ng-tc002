@@ -1,0 +1,106 @@
+name: Experimental trial
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: experimental-trial
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: '0.12.14'
+          python-version: '3.12'
+          enable-cache: true
+      - name: Install host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev perl curl xz-utils
+      - name: Build and test on the host
+        run: |
+          uv sync --locked
+          uv run cmake -S . -B build-host -G Ninja -DCMAKE_BUILD_TYPE=Release
+          uv run cmake --build build-host -j4
+          uv run ctest --test-dir build-host --output-on-failure
+          uv run pytest -q
+      - name: Cache pinned ARM toolchain and OpenSSL
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build-deps
+          key: tc002-arm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/build.sh', 'tools/build_tls.sh', 'cmake/tc002-arm.cmake') }}
+      - name: Build the ARM application
+        run: bash tools/build.sh
+      - name: Package and verify the public trial
+        run: |
+          uv run tools/package_trial.py
+          uv run tools/check_trial_package.py dist/public/awtrix-ng-tc002-trial.zip --commit "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: experimental-trial
+          path: |
+            dist/public/awtrix-ng-tc002-trial.zip
+            dist/public/awtrix-ng-tc002-trial.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: experimental-trial
+          path: dist/public
+      - name: Publish rolling experimental prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          current=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
+          if [[ "$current" != "$GITHUB_SHA" ]]; then
+            echo "A newer main commit exists; its workflow will publish the trial."
+            exit 0
+          fi
+          (cd dist/public && sha256sum -c awtrix-ng-tc002-trial.zip.sha256)
+          notes="$RUNNER_TEMP/trial-release.md"
+          cp docs/TRIAL-RELEASE.md "$notes"
+          printf '\n## Build\n\nSource: [%s](https://github.com/%s/commit/%s)\n\n[Build and checks](https://github.com/%s/actions/runs/%s)\n' \
+            "$GITHUB_SHA" "$GH_REPO" "$GITHUB_SHA" "$GH_REPO" "$GITHUB_RUN_ID" >> "$notes"
+          tag=experimental-trial
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" \
+              dist/public/awtrix-ng-tc002-trial.zip \
+              dist/public/awtrix-ng-tc002-trial.zip.sha256 --clobber
+            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/$tag" \
+              -f sha="$GITHUB_SHA" -F force=true
+            gh release edit "$tag" --prerelease --latest=false \
+              --title 'Experimental RAM trial (main)' --notes-file "$notes"
+          else
+            gh release create "$tag" \
+              dist/public/awtrix-ng-tc002-trial.zip \
+              dist/public/awtrix-ng-tc002-trial.zip.sha256 \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title 'Experimental RAM trial (main)' --notes-file "$notes"
+          fi

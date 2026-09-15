@@ -137,6 +137,40 @@ TC002_TOOLCHAIN=/path/to/gcc9 TC002_TLS=/path/to/openssl-build bash tools/build.
 
 ## Try from RAM first
 
+**[Download the experimental trial](https://github.com/sanderdw/awtrix-ng-tc002/releases/tag/experimental-trial)**
+to try it without compiling or flashing firmware. Install
+[Google Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
+and [uv](https://docs.astral.sh/uv/getting-started/installation/), extract the ZIP,
+and open a terminal in its `awtrix-ng-tc002-trial` folder. With `adb` and `uv` on
+your PATH, substitute your clock's IP:
+
+```sh
+adb connect 192.168.100.190:5555
+uv run --no-project try.py 192.168.100.190 --binary bin/awtrix-tc002 --seconds 180
+```
+
+Open `http://192.168.100.190:18081` when the terminal prints `Trial ready`. The
+installed app restarts after three minutes. During the trial, avoid Wi-Fi,
+factory-reset, firmware-update and reboot controls; those affect real hardware.
+
+GitHub Actions refreshes this prerelease after each successful tested build of
+`main`. The download URLs stay the same; `manifest.json` records the exact source
+commit. Failed builds leave the previous download available. These are
+experimental builds, not automatically installed updates for your clock.
+
+For an overview, prerequisites and recovery commands, see
+[the temporary trial guide](docs/TRY-IT.md). Maintainers can prepare a prebuilt
+public trial ZIP after building with:
+
+```sh
+uv run tools/package_trial.py
+```
+
+The archive and checksum are written to `dist/public/`. It contains the native
+application, web UI, CA certificates, trial runner and license notices. It does
+not contain vendor device files, personal backups or a firmware updater. Extract
+it and run the commands in its README; no compilation is needed to try it.
+
 Use Google Android platform-tools ADB. The TC002's old ADB implementation does
 not support `adb reverse`. Port 5555 must be reachable on your local network.
 
