@@ -1,17 +1,17 @@
-# Experimental RAM trial
+# Experimental RAM trial @TAG@
 
 Try **AWTRIX NG TC002** for three minutes without installing firmware. The trial
 temporarily controls the display and buttons, then restarts the app already
 installed on your clock. No compilation is needed.
 
-**This is an experimental rolling build of `main`.** Automated tests do not
+**This is an experimental build of `@TAG@`.** Automated tests do not
 replace physical testing on every TC002 revision. Hardware validation so far
 covers stock app 1.1.1 and MCU V1.0.17.
 
 ## Download
 
-- [Trial ZIP](https://github.com/sanderdw/awtrix-ng-tc002/releases/download/experimental-trial/awtrix-ng-tc002-trial.zip)
-- [SHA-256 checksum](https://github.com/sanderdw/awtrix-ng-tc002/releases/download/experimental-trial/awtrix-ng-tc002-trial.zip.sha256)
+- [Trial ZIP](https://github.com/sanderdw/awtrix-ng-tc002/releases/download/@TAG@/awtrix-ng-tc002-trial.zip)
+- [SHA-256 checksum](https://github.com/sanderdw/awtrix-ng-tc002/releases/download/@TAG@/awtrix-ng-tc002-trial.zip.sha256)
 
 The download contains the prebuilt ARM application, web UI, CA certificates,
 trial runner and license notices. It contains no vendor runtime libraries,
@@ -57,12 +57,11 @@ installed in flash. This does **not** mean a firmware flash can be interrupted.
 
 [Full trial guide](https://github.com/sanderdw/awtrix-ng-tc002/blob/main/docs/TRY-IT.md)
 
-## Automatic updates
+## Versioned releases
 
-After a push to `main`, GitHub Actions runs host regression tests, builds the ARM
-application and validates the archive before replacing these two downloads.
-Failed builds leave the previous download available. A manual workflow run on
-`main` can refresh it too. The `experimental-trial` tag moves to the published
-source commit; each ZIP records its version, source commit and file checksums
-in `manifest.json`. Download it again to test a newer build. Your clock does not
-install updates automatically.
+Each version gets a separate tag and release. GitHub Actions runs host regression
+tests, builds the tagged ARM application and validates the archive before
+publishing its downloads. Existing tags and release assets are preserved.
+Each ZIP records its version, source commit and file checksums in `manifest.json`.
+Choose a newer release to try a newer build. Your clock does not install updates
+automatically.

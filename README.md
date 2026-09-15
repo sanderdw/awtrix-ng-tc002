@@ -28,7 +28,7 @@ clock's 12-character MAC; it can be changed in System → MQTT.
 
 ## Current status
 
-This **1.1.0-tc002.5 release candidate was installed and verified after a Linux reboot** on the
+This **1.1.0-tc002.7 release candidate was installed and verified after a Linux reboot** on the
 test clock on 2026-09-15. AWTRIX starts automatically from flash, serves the web UI
 on port 80 and stores settings in `/data/awtrix-ng`. See [WORKLOG.md](WORKLOG.md)
 for measured results and outstanding physical checks.
@@ -118,6 +118,9 @@ locally.
 - Turn the knob to move between apps.
 - Tap **−/+** to lower/raise speaker volume by 5 percentage points on release.
   Tone, MP3 and radio volume each change by the same amount, within 0–100%.
+  Since 1.1.0-tc002.6, a speaker icon and percentage appear for 1.5 seconds after
+  each tap (with a mute symbol at 0%). The percentage follows MP3/radio while
+  playing, or tone volume when idle. The current app resumes automatically afterward.
 - Hold **−/+** for 0.7 seconds to lower/raise brightness by 10 (on the 1–255
   scale), repeating every 0.2 seconds while held. A hold does not change volume.
 - Knob/select presses retain notification dismissal and double-press power control.
@@ -157,7 +160,7 @@ TC002_TOOLCHAIN=/path/to/gcc9 TC002_TLS=/path/to/openssl-build bash tools/build.
 
 ## Try from RAM first
 
-**[Download the experimental trial](https://github.com/sanderdw/awtrix-ng-tc002/releases/tag/experimental-trial)**
+**[Choose an experimental trial release](https://github.com/sanderdw/awtrix-ng-tc002/releases)**
 to try it without compiling or flashing firmware. Install
 [Google Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
 and [uv](https://docs.astral.sh/uv/getting-started/installation/), extract the ZIP,
@@ -173,9 +176,10 @@ Open `http://192.168.100.190:18081` when the terminal prints `Trial ready`. The
 installed app restarts after three minutes. During the trial, avoid Wi-Fi,
 factory-reset, firmware-update and reboot controls; those affect real hardware.
 
-GitHub Actions refreshes this prerelease after each successful tested build of
-`main`. The download URLs stay the same; `manifest.json` records the exact source
-commit. Failed builds leave the previous download available. These are
+Each release has a separate version tag, such as `v1.1.0-tc002.7`. GitHub Actions
+tests and builds that tag before publishing its own ZIP and checksum. Published
+tags and downloads are preserved; `manifest.json` records the exact source
+commit. Pushes to `main` run checks without replacing a release. These are
 experimental builds, not automatically installed updates for your clock.
 
 For an overview, prerequisites and recovery commands, see

@@ -12,6 +12,7 @@
 namespace awtrix {
 
 class CoreEngine;
+class Canvas;
 
 // Host twin of PeripheryService. Same debounce and brightness rules, but deliberately without the
 // median filters and smoothing: an injected sensor value must show up on the next tick.
@@ -20,6 +21,9 @@ class SimPeriphery {
   void begin(CoreEngine& engine, IBoard& board, const DeviceConfig& cfg);
   void setButtonHook(std::function<bool(int)> hook) { buttonHook_ = std::move(hook); }
   void tick(int64_t nowMs);
+#ifdef AWTRIX_TC002
+  void renderControlFeedback(Canvas& canvas, int64_t nowMs) const;
+#endif
 
  private:
   LightConfig lightConfig() const;
@@ -32,7 +36,8 @@ class SimPeriphery {
   ButtonState raw_{};
   ButtonState stable_{};
 #ifdef AWTRIX_TC002
-  void adjustControl(bool brightness, int direction);
+  void adjustControl(bool brightness, int direction, int64_t nowMs);
+  int64_t volumeFeedbackUntilMs_ = 0;
   int64_t controlPressedMs_[2] = {0, 0};
   int64_t controlRepeatMs_[2] = {0, 0};
   bool controlLong_[2] = {false, false};

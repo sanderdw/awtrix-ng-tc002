@@ -657,6 +657,9 @@ int main(int argc, char** argv) {
         } else if (!artnet.tick(*g_canvas,now)) {
           g_pipeline->renderFrame(*g_canvas, now);
         }
+#ifdef AWTRIX_TC002
+        g_periphery.renderControlFeedback(*g_canvas, now);
+#endif
         g_power->finish(*g_canvas);
         break;
     }

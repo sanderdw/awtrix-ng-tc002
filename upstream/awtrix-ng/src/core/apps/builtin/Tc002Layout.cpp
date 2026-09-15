@@ -130,6 +130,35 @@ bool date(Canvas& c, const RenderCtx& ctx) {
   return true;
 }
 
+bool volume(Canvas& c, const GfxFont& font, int percent) {
+  if (!supported(c)) return false;
+  c.clear();
+  const int pct = std::clamp(percent, 0, 100);
+  constexpr uint32_t color = 0xFFFFFFu;
+  constexpr int x = 4;
+  // Speaker cone and either sound waves or a mute cross, in physical pixels.
+  c.fillRect(x, 6, 4, 4, color);
+  c.fillRect(x + 4, 4, 2, 8, color);
+  c.fillRect(x + 6, 2, 2, 12, color);
+  if (pct) {
+    c.fillRect(x + 10, 6, 2, 4, color);
+    c.fillRect(x + 12, 2, 2, 2, color);
+    c.fillRect(x + 14, 4, 2, 8, color);
+    c.fillRect(x + 12, 12, 2, 2, color);
+  } else {
+    c.drawLine(x + 10, 5, x + 15, 10, color);
+    c.drawLine(x + 10, 10, x + 15, 5, color);
+  }
+  auto label = line(font, formatBattery(pct));
+  // The shifted 100% label needs one less column before '%' to fit the panel.
+  if (pct == 100) {
+    --label.positions.back();
+    --label.right;
+  }
+  centered(c, font, label, x + 17, 34, 13, color, color);
+  return true;
+}
+
 bool battery(Canvas& c, const RenderCtx& ctx) {
   if (!supported(c)) return false;
   c.clear();

@@ -295,3 +295,45 @@ web access. After the owner power-cycled the clock, it reconnected. The installe
 and desktop/mobile branding checks passed against the clock. All saved device
 and display settings matched the pre-update backup; MQTT connected through
 `mqttserver.lan`, and the application reported 42 FPS.
+
+## 2026-09-15: volume button display feedback (1.1.0-tc002.6)
+
+Minus/plus taps changed the volume without rendering any feedback. Each tap now
+shows a speaker icon and percentage for 1.5 seconds, with a mute cross at zero.
+Further taps refresh the timer. The displayed value follows active MP3/radio
+playback, falling back to tone volume when idle. The underlying app continues
+running and becomes visible again when the feedback expires. Powered-off panels
+stay dark, and brightness holds do not trigger volume feedback.
+
+Validation: 54 host control/native-layout/scaling tests and all three CTests
+passed. The ARM build and host/device firmware validation passed. Comparing the
+new filesystem with the live backup found only `bin/awtrix-tc002` changed.
+
+Installed update SHA256:
+`7c310023ddf5215aa8568dc0260576cee6ae6fd4ac49ab9aea5719a62a7c63f3`.
+The updater reported a verified flash write and rebooted Linux. The changed boot
+ID, running launcher service and installed API confirm automatic startup into
+1.1.0-tc002.6. The installed application is byte-identical to the built binary;
+all eight saved configuration/asset files match the pre-install backup.
+
+Backup, rollback image and installation evidence are saved locally under
+`device-private/pre-volume-feedback-20260915/`. Update artifacts are in
+`dist/volume-feedback/`. Physical button/panel appearance remains an owner check.
+
+## 2026-09-15: volume feedback shifted right (1.1.0-tc002.7)
+
+At the owner's request, moved the speaker/mute icon and percentage four physical
+pixels to the right. At 100%, reduced the gap before the percent sign by one
+pixel so its final column remains visible on the 52-column panel.
+
+Verified every level from 0 through 100 against the previous renderer: the shift
+preserves every lit pixel, with only the documented 100% spacing adjustment.
+All 31 control/native-layout tests passed; host and ARM builds passed.
+
+Installed update SHA256:
+`4a9507875d9885ce65bbd6c44f37c79f0353b16e8b2b21933989eb24a208bf78`.
+Host validation and device preflight passed. The updater verified the flash write,
+then the clock rebooted and started version 1.1.0-tc002.7 automatically.
+Only the application binary changed in the firmware filesystem.
+Backups and installation evidence are in
+`device-private/pre-volume-shift-20260915/`; artifacts are in `dist/volume-shift/`.

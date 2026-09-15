@@ -1,6 +1,8 @@
 #include "sim/SimPeriphery.h"
 #ifdef AWTRIX_TC002
 #include "Tc002Hardware.h"
+#include "core/apps/builtin/Tc002Layout.h"
+#include "media/AwtrixFontAdapter.h"
 #endif
 
 #include "core/Command.h"
@@ -31,7 +33,7 @@ void SimPeriphery::begin(CoreEngine& engine, IBoard& board, const DeviceConfig& 
 }
 
 #ifdef AWTRIX_TC002
-void SimPeriphery::adjustControl(bool brightness, int direction) {
+void SimPeriphery::adjustControl(bool brightness, int direction, int64_t nowMs) {
   const auto& s = engine_->state().settings();
   Command command(CommandType::SetSettings);
   if (brightness) {
@@ -45,7 +47,16 @@ void SimPeriphery::adjustControl(bool brightness, int direction) {
     command.payload = "{\"buzzerVolume\":" + volume(s.buzzerVolume) +
       ",\"mp3Volume\":" + volume(s.mp3Volume) + ",\"radioVolume\":" + volume(s.radioVolume) + "}";
   }
-  engine_->submit(command);
+  if (engine_->submit(command)) volumeFeedbackUntilMs_ = brightness ? 0 : nowMs + 1500;
+}
+
+void SimPeriphery::renderControlFeedback(Canvas& canvas, int64_t nowMs) const {
+  if (nowMs >= volumeFeedbackUntilMs_) return;
+  const auto& s = engine_->state().settings();
+  const auto& rt = engine_->state().runtime();
+  // Show the active source's level; idle feedback uses the tone volume.
+  const int volume = rt.mp3Playing ? s.mp3Volume : rt.radioPlaying ? s.radioVolume : s.buzzerVolume;
+  tc002layout::volume(canvas, awtrixFont(FontId::Small), volume);
 }
 #endif
 
@@ -89,9 +100,9 @@ void SimPeriphery::tick(int64_t nowMs) {
         (!controlLong_[i] || nowMs - controlRepeatMs_[i] >= 200)) {
       controlLong_[i] = true;
       controlRepeatMs_[i] = nowMs;
-      adjustControl(true, direction);
+      adjustControl(true, direction, nowMs);
     }
-    if (!held[i] && wasHeld[i] && !controlLong_[i]) adjustControl(false, direction);
+    if (!held[i] && wasHeld[i] && !controlLong_[i]) adjustControl(false, direction, nowMs);
   }
   const int rotation = board_->takeRotation();
   for (int i = 0; i < std::abs(rotation); ++i) {

@@ -19,6 +19,64 @@ def current(app):
     return app('/api/v1/device')['currentApp']
 
 
+def screen(app):
+    return app('/api/v1/display/screen')['pixels']
+
+
+def has_speaker(pixels):
+    return pixels[6*52+4] == 0xFFFFFF and pixels[2*52+4] == 0 and pixels[2*52+10] == 0xFFFFFF
+
+
+def wait_screen(app, predicate, timeout=2):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        pixels = screen(app)
+        if predicate(pixels):
+            return pixels
+        time.sleep(.03)
+    raise AssertionError('expected display feedback did not appear')
+
+
+def test_volume_feedback_updates_extends_and_restores_app(app):
+    setup_controls(app)
+    # A static app makes restoration distinguishable from a changing clock.
+    app('/api/v1/apps/pushed/control-test', {'text': 'TEST', 'textColor': '#FF0000'}, 'PUT')
+    app('/api/v1/apps/active', {'name': 'control-test', 'fast': True}, 'PUT')
+    baseline = wait_screen(app, lambda p: 0xFF0000 in p)
+    app('/sim/button/right', {'durationMs': 100}, 'POST')
+    first = wait_screen(app, has_speaker)
+    assert current(app) == 'control-test'
+    time.sleep(.9)
+    app('/sim/button/right', {'durationMs': 100}, 'POST')
+    second = wait_screen(app, lambda p: has_speaker(p) and p != first)
+    assert app('/api/v1/settings')['buzzerVolume'] == 60
+    time.sleep(.8)  # past the first tap's timeout, inside the second tap's timeout
+    assert screen(app) == second
+    wait_screen(app, lambda p: p == baseline)
+    assert current(app) == 'control-test'
+
+
+@pytest.mark.parametrize('button,volume', [('left', 0), ('right', 100)])
+def test_volume_feedback_at_limits(app, button, volume):
+    setup_controls(app, **dict.fromkeys(VOLUMES, volume))
+    app('/sim/button/'+button, {'durationMs': 100}, 'POST')
+    pixels = wait_screen(app, has_speaker)
+    # A limit press still gives feedback; zero has a mute cross instead of waves.
+    assert pixels[2*52+16] == (0 if volume == 0 else 0xFFFFFF)
+    assert any(pixels[y*52+x] for y in range(16) for x in range(21, 52))
+    assert app('/api/v1/settings')['buzzerVolume'] == volume
+
+
+def test_volume_feedback_keeps_powered_off_panel_dark(app):
+    setup_controls(app)
+    app('/api/v1/display', {'power': False}, 'PATCH')
+    wait_screen(app, lambda p: not any(p))
+    app('/sim/button/right', {'durationMs': 100}, 'POST')
+    time.sleep(.3)
+    assert app('/api/v1/settings')['buzzerVolume'] == 55
+    assert not any(screen(app))
+
+
 @pytest.mark.parametrize('button,delta', [('left', -5), ('right', 5)])
 def test_tap_changes_volume_only_on_release(app, button, delta):
     setup_controls(app)

@@ -40,5 +40,23 @@ Keep device backups, generated firmware images, credentials and personal test
 artifacts out of commits. `tools/package_release.py` creates a personal firmware
 package containing the owner's stock files; that ZIP is not a public release asset.
 
+## Versioned releases
+
+Every published version uses its own annotated tag, such as `v1.1.0-tc002.7`.
+Before releasing, update the firmware version in `CMakeLists.txt` and
+`tools/image.py`, update the release documentation, and commit the tested changes.
+Then create and push a matching tag:
+
+```sh
+git tag -a v1.1.0-tc002.7 -m 'Release 1.1.0-tc002.7'
+git push origin main v1.1.0-tc002.7
+```
+
+Use the new version in both commands for each subsequent release. The workflow
+checks that the tag matches the firmware version, runs the tests, and publishes
+the public RAM-trial ZIP and checksum under that tag. Pushes to `main` run checks
+without publishing. Never move a published tag or replace its downloads; make a
+new version instead. The old `experimental-trial` release remains as an archive.
+
 Contributions to the application and port use the existing PolyForm Noncommercial
 1.0.0 terms. Preserve Blueforcer's required notice and all third-party notices.

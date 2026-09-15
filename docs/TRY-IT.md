@@ -8,9 +8,9 @@ normal AWTRIX settings and the stock application are not replaced.
 Hardware validation so far covers TC002 stock app 1.1.1 and MCU V1.0.17. This is
 an experimental port, not a guarantee that every TC002 revision will work.
 
-[Download the experimental trial ZIP](https://github.com/sanderdw/awtrix-ng-tc002/releases/download/experimental-trial/awtrix-ng-tc002-trial.zip)
-and its [SHA-256 checksum](https://github.com/sanderdw/awtrix-ng-tc002/releases/download/experimental-trial/awtrix-ng-tc002-trial.zip.sha256).
-GitHub Actions replaces these downloads after successful tested builds of `main`.
+[Choose a versioned trial release](https://github.com/sanderdw/awtrix-ng-tc002/releases)
+and download its trial ZIP and SHA-256 checksum. Each release has its own fixed
+tag and downloads, published after GitHub Actions tests and builds that version.
 Check `manifest.json` inside the ZIP for the version and source commit. New builds
 are experimental; your clock will not download or install them automatically.
 
