@@ -5,6 +5,7 @@
 
 #include "core/Command.h"
 #include "core/CoreEngine.h"
+#include <algorithm>
 
 namespace awtrix {
 
@@ -29,6 +30,25 @@ void SimPeriphery::begin(CoreEngine& engine, IBoard& board, const DeviceConfig& 
   cfg_ = &cfg;
 }
 
+#ifdef AWTRIX_TC002
+void SimPeriphery::adjustControl(bool brightness, int direction) {
+  const auto& s = engine_->state().settings();
+  Command command(CommandType::SetSettings);
+  if (brightness) {
+    // Keep the display visible at the lower end; power-off remains a separate action.
+    const int value = std::clamp(s.brightness + direction * 10, 1, 255);
+    command.payload = "{\"brightness\":" + std::to_string(value) + ",\"autoBrightness\":false}";
+  } else {
+    const auto volume = [direction](int value) { return std::to_string(std::clamp(value + direction * 5, 0, 100)); };
+    // One physical speaker serves tones, files and radio. Adjust each existing
+    // volume by the same step, preserving independently configured levels.
+    command.payload = "{\"buzzerVolume\":" + volume(s.buzzerVolume) +
+      ",\"mp3Volume\":" + volume(s.mp3Volume) + ",\"radioVolume\":" + volume(s.radioVolume) + "}";
+  }
+  engine_->submit(command);
+}
+#endif
+
 void SimPeriphery::tick(int64_t nowMs) {
   ButtonState sample{};
   board_->pollButtons(sample);
@@ -44,24 +64,57 @@ void SimPeriphery::tick(int64_t nowMs) {
   debounce(sample.right, raw_.right, rawChangeMs_[2], stable_.right);
   const ButtonState& cur = stable_;
   const bool blocked = engine_->state().settings().blockNavigation;
+#ifndef AWTRIX_TC002
   const bool lEdge = cur.left && !prev_.left;
   const bool rEdge = cur.right && !prev_.right;
+#endif
   const bool sEdge = cur.select && !prev_.select;
   // Rotating the panel by 180 degrees physically swaps left and right, so the user's swap setting
   // has to XOR with it rather than simply override it.
   const bool swapped = cfg_->rotate != cfg_->swapButtons;
   // Scripts get first refusal on every press; returning true suppresses the built-in navigation.
   bool consumed = false;
+#ifdef AWTRIX_TC002
+  // The physical -/+ rocker is reserved for volume/brightness. Delay its short
+  // action until release so a brightness hold never also changes the volume.
+  const bool held[2] = {cur.left, cur.right};
+  const bool wasHeld[2] = {prev_.left, prev_.right};
+  for (int i = 0; i < 2; ++i) {
+    const int direction = i == 0 ? -1 : 1;
+    if (held[i] && !wasHeld[i]) {
+      controlPressedMs_[i] = nowMs;
+      controlLong_[i] = false;
+    }
+    if (held[i] && nowMs - controlPressedMs_[i] >= 700 &&
+        (!controlLong_[i] || nowMs - controlRepeatMs_[i] >= 200)) {
+      controlLong_[i] = true;
+      controlRepeatMs_[i] = nowMs;
+      adjustControl(true, direction);
+    }
+    if (!held[i] && wasHeld[i] && !controlLong_[i]) adjustControl(false, direction);
+  }
+  const int rotation = board_->takeRotation();
+  for (int i = 0; i < std::abs(rotation); ++i) {
+    const bool next = (rotation > 0) != swapped;
+    const bool handled = buttonHook_ && buttonHook_(next ? 2 : 0);
+    if (!handled && !blocked)
+      engine_->submit(Command(next ? CommandType::NextApp : CommandType::PreviousApp));
+  }
+  if (sEdge && buttonHook_) consumed = buttonHook_(1);
+#else
   if (buttonHook_) {
     if (lEdge) consumed |= buttonHook_(swapped ? 2 : 0);
     if (sEdge) consumed |= buttonHook_(1);
     if (rEdge) consumed |= buttonHook_(swapped ? 0 : 2);
   }
+#endif
   if (!consumed) {
+#ifndef AWTRIX_TC002
     if (lEdge && !blocked)
       engine_->submit(Command(swapped ? CommandType::NextApp : CommandType::PreviousApp));
     if (rEdge && !blocked)
       engine_->submit(Command(swapped ? CommandType::PreviousApp : CommandType::NextApp));
+#endif
     // One press dismisses the current notification, two inside kDoublePressMs toggle the panel.
     if (sEdge) {
       engine_->submit(Command(CommandType::DismissNotify));

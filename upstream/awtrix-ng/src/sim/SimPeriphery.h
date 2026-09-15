@@ -31,6 +31,12 @@ class SimPeriphery {
   ButtonState prev_{};
   ButtonState raw_{};
   ButtonState stable_{};
+#ifdef AWTRIX_TC002
+  void adjustControl(bool brightness, int direction);
+  int64_t controlPressedMs_[2] = {0, 0};
+  int64_t controlRepeatMs_[2] = {0, 0};
+  bool controlLong_[2] = {false, false};
+#endif
   int64_t rawChangeMs_[3] = {0, 0, 0};
   int64_t lastSelectEdgeMs_ = -100000;
   static constexpr long kDebounceMs = 35;

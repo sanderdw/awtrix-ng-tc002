@@ -37,6 +37,8 @@ class IBoard {
   // Raw ADC counts, not lux; the light curve is applied further up in AutoBrightness.
   virtual int readLdrRaw() = 0;
   virtual void pollButtons(ButtonState& out) = 0;
+  // Consume rotary detents separately from held button states.
+  virtual int takeRotation() { return 0; }
 
   // Null means "not wired on this board". Both can be live at once: LEDC and a UART share nothing,
   // and adding a DFPlayer must not cost the buzzer.

@@ -159,13 +159,17 @@ class SimBoard : public IBoard {
     if (tc002::hardwareEnabled()) {
       int rotation=0;
       hardware_.poll(out.left, out.select, out.right, rotation);
-      if (rotation<0) leftUntilMs=now+80;
-      if (rotation>0) rightUntilMs=now+80;
-      out.left = out.left || now<leftUntilMs;
-      out.right = out.right || now<rightUntilMs;
+      pendingRotation += rotation;
     }
 #endif
   }
+
+  int takeRotation() override {
+    const int value = pendingRotation;
+    pendingRotation = 0;
+    return value;
+  }
+  int pendingRotation = 0;
 
   sound::IToneSink* toneSink() override {
 #ifdef AWTRIX_TC002

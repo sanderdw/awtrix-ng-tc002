@@ -437,6 +437,11 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
 void SimHttpServer::Impl::handleSim(const httplib::Request& req, const std::string& method,
                                     httplib::Response& res) {
   const std::string& path = req.path;
+  if (method == "POST" && (path == "/sim/rotary/left" || path == "/sim/rotary/right")) {
+    board->pendingRotation += path == "/sim/rotary/right" ? 1 : -1;
+    sendJson(res, 200, "{\"ok\":true}");
+    return;
+  }
   if (method == "POST" && path.rfind("/sim/button/", 0) == 0) {
     const std::string btn = path.substr(12);
     if (btn != "left" && btn != "select" && btn != "right") {

@@ -1,6 +1,6 @@
 # TC002 port validation
 
-Latest validated candidate: **1.1.0-tc002.3**, with 103 passing pytest cases and
+Latest validated candidate: **1.1.0-tc002.4**, with 112 passing pytest cases and
 one passing hardware CTest. The sections below record successive validation
 rounds; earlier version numbers and test counts describe those earlier rounds.
 Paths under `device-private/` and `dist/` refer to local evidence and artifacts
@@ -206,3 +206,27 @@ Post-installation verification:
 - Clock/calendar modes 0–4 use native layouts when the text fits. Big/binary modes
   and date formats wider than 52 physical pixels retain the previous fitted path.
   The physical GPIO/SPI driver, web UI, scripts and MQTT contract are unchanged.
+
+## 2026-09-15: separate minus/plus button controls (1.1.0-tc002.4)
+
+The separate minus/plus buttons previously shared app navigation with the knob.
+Rotary detents now travel separately from held button states; knob navigation and
+select behavior remain available. The minus/plus buttons change all three speaker
+volume settings by five percentage points on short release. After a 700 ms hold,
+they change brightness by ten every 200 ms, clamped to 1–255. Long releases do not
+also adjust volume. Volume values clamp to 0–100. Changes use the normal settings
+dispatcher, persistence and state publication. Physical minus/plus direction is
+independent of panel rotation and navigation swapping.
+
+Validation: 112 pytest cases and the hardware CTest passed; the ARM build, image
+validator and physical updater preflight passed. Nine new application-level cases
+cover both button directions, release timing, hold repetition, value limits, knob
+navigation, navigation locking and saved settings. The display driver and approved
+clock/date/battery layouts are unchanged. Physical press/hold confirmation remains
+an owner check.
+
+Installed update SHA256
+`f744b32c7aadbfb52ccd6f46e8dc2095fec2b774191ef4ca3cf16437b2f5db2b`.
+The updater verified every flash block and rebooted Linux. The installed API
+reports 1.1.0-tc002.4 at 42 FPS; both persistent configuration files are identical
+to their pre-update backups.

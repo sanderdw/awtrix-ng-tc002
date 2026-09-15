@@ -93,6 +93,19 @@ the bootloader and MCU firmware are preserved.
   status indicators are two pixels thick; dense bar charts retain their final
   sample and fill the available width.
 
+## Physical controls (1.1.0-tc002.4)
+
+- Turn the knob to move between apps.
+- Tap **−/+** to lower/raise speaker volume by 5 percentage points on release.
+  Tone, MP3 and radio volume each change by the same amount, within 0–100%.
+- Hold **−/+** for 0.7 seconds to lower/raise brightness by 10 (on the 1–255
+  scale), repeating every 0.2 seconds while held. A hold does not change volume.
+- Knob/select presses retain notification dismissal and double-press power control.
+
+Volume and brightness changes use the normal settings persistence and MQTT state
+updates. Physical −/+ labels keep their meaning when the display is rotated;
+rotation and button-swap settings still apply to knob navigation.
+
 ## Build on Linux x86-64
 
 Install `uv`, a C/C++ build environment, Perl, curl, tar, and `squashfs-tools`.

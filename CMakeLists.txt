@@ -25,7 +25,7 @@ add_executable(tc002-update src/FirmwareUpdate.cpp src/FirmwareImage.cpp)
 target_include_directories(awtrix-tc002 PRIVATE src ${U}/src ${U}/src/sim/compat
   vendor/base64/src vendor/PubSubClient/src)
 target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002
-  AWTRIX_NG_VERSION="1.1.0-tc002.3" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
+  AWTRIX_NG_VERSION="1.1.0-tc002.4" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(awtrix-tc002 PRIVATE -Wall -Wextra -Wno-unused-parameter
   -ffunction-sections -fdata-sections)
 target_link_options(awtrix-tc002 PRIVATE -Wl,--gc-sections)
