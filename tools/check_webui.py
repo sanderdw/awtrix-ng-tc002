@@ -36,6 +36,11 @@ with sync_playwright() as pw:
     page.goto(a.url+'/#/editor',wait_until='domcontentloaded')
     page.locator('#piskelFrame').wait_for()
     assert 'sizes=16x16,52x16,8x8,32x8' in page.locator('#piskelFrame').get_attribute('src')
+    with page.expect_response(lambda r: r.url.endswith('/api/v1/audio/mp3')) as mp3:
+        page.goto(a.url+'/#/audio', wait_until='domcontentloaded')
+    assert mp3.value.status == 200
+    assert isinstance(mp3.value.json()['files'], list)
+    page.locator('input[type=file][accept=".mp3,audio/mpeg"]').wait_for(state='attached')
     assert not errors, errors
     print("Web UI loads without JavaScript errors; preview is 52 × 16 pixels.")
     browser.close()

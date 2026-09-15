@@ -288,13 +288,13 @@ int main(int argc, char** argv) {
 #endif
   logbuf::setVerbose(cfg.debugMode);
 
-  g_board.begin();
-  static ArtnetService artnet;
-  if(cfg.artnet) artnet.begin();
 #ifdef AWTRIX_TC002
   DeviceConfig networkConfig=cfg; networkConfig.webPort=port;
   tc002System.begin(networkConfig);
 #endif
+  g_board.begin();
+  static ArtnetService artnet;
+  if(cfg.artnet) artnet.begin();
   g_board.setMatrixLayout(cfg.matrixLayout());
   g_canvas = new Canvas(g_board.matrixWidth(), g_board.matrixHeight());
   g_power = new render::PowerAnimator(g_board.matrixWidth(), g_board.matrixHeight());

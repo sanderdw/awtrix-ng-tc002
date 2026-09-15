@@ -20,12 +20,12 @@ add_executable(awtrix-tc002 ${CORE} ${SIM}
   ${U}/src/transport/DeviceStateJson.cpp
   ${U}/src/transport/net/ArtnetService.cpp ${U}/src/transport/net/UdpSocket.cpp
   vendor/PubSubClient/src/PubSubClient.cpp
-  src/Tc002Hardware.cpp src/Tc002Audio.cpp src/Tc002System.cpp src/Tc002Mdns.cpp src/FirmwareImage.cpp)
+  src/Tc002Hardware.cpp src/Tc002Audio.cpp src/Tc002System.cpp src/Tc002Dns.cpp src/Tc002Mdns.cpp src/FirmwareImage.cpp)
 add_executable(tc002-update src/FirmwareUpdate.cpp src/FirmwareImage.cpp)
 target_include_directories(awtrix-tc002 PRIVATE src ${U}/src ${U}/src/sim/compat
   vendor/base64/src vendor/PubSubClient/src)
 target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002
-  AWTRIX_NG_VERSION="1.1.0-tc002.4" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
+  AWTRIX_NG_VERSION="1.1.0-tc002.5" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(awtrix-tc002 PRIVATE -Wall -Wextra -Wno-unused-parameter
   -ffunction-sections -fdata-sections)
 target_link_options(awtrix-tc002 PRIVATE -Wl,--gc-sections)
@@ -58,6 +58,14 @@ if(CMAKE_CROSSCOMPILING)
 endif()
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(test-loader tests/loader_test.c)
+  target_include_directories(test-loader PRIVATE src)
+  add_test(NAME tc002-loader COMMAND test-loader)
+  add_executable(test-dns tests/dns_test.cpp src/Tc002Dns.cpp)
+  target_include_directories(test-dns PRIVATE src ${U}/src ${U}/src/sim/compat)
+  target_compile_definitions(test-dns PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002)
+  target_link_libraries(test-dns PRIVATE ${CMAKE_DL_LIBS})
+  add_test(NAME tc002-dns COMMAND test-dns)
   add_executable(test-layout-render tests/layout_render.cpp
     ${U}/src/core/apps/builtin/Tc002Layout.cpp
     ${U}/src/core/apps/ClockText.cpp ${U}/src/core/apps/SensorFormat.cpp

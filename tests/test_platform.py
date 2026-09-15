@@ -56,6 +56,59 @@ def test_device_reports_fixed_capabilities(app):
     assert caps['matrix']=={'width':52,'height':16,'fixed':True}
     assert caps['gpio']['soc']=='ssd202d' and caps['gpio']['fixed']
 
+def upload_mp3(app, name, content, query=''):
+    boundary = 'awtrix-mp3-test'
+    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
+            f'filename="{name}"\r\nContent-Type: audio/mpeg\r\n\r\n').encode()
+    body += content + f'\r\n--{boundary}--\r\n'.encode()
+    request = urllib.request.Request(app.base_url + '/api/v1/audio/mp3' + query, body,
+        {'Content-Type': f'multipart/form-data; boundary={boundary}'}, method='POST')
+    with urllib.request.urlopen(request, timeout=3) as response:
+        return json.load(response)
+
+def test_audio_mp3_routes(app):
+    assert app('/api/v1/audio')['stations'] == []
+    assert app('/api/v1/audio/melodies')['melodies'] == []
+    assert app('/api/v1/audio/mp3')['files'] == []
+    content = b'ID3' + bytes(20)
+    assert upload_mp3(app, 'door-bell_1.mp3', content, '?dir=/ICONS')['ok']
+    listing = app('/api/v1/audio/mp3?dir=/ICONS')
+    assert listing['files'] == [{'name': 'door-bell_1.mp3', 'size': len(content)}]
+    assert listing['usedBytes'] >= len(content)
+    with urllib.request.urlopen(app.base_url + '/MP3/door-bell_1.mp3') as response:
+        assert response.read() == content
+        assert response.headers['Content-Type'] == 'audio/mpeg'
+    assert app('/api/v1/files?dir=/ICONS')['files'] == []
+    assert app('/api/v1/audio/mp3/door-bell_1', method='DELETE')['ok']
+    assert app('/api/v1/audio/mp3')['files'] == []
+    with pytest.raises(urllib.error.HTTPError) as error:
+        app('/api/v1/audio/mp3/door-bell_1', method='DELETE')
+    assert error.value.code == 404
+
+@pytest.mark.parametrize('name,content,status', [
+    ('bad name.mp3', b'ID3test', 400),
+    ('../escape.mp3', b'ID3test', 400),
+    ('/ICONS/escape.mp3', b'ID3test', 400),
+    ('tone.wav', b'ID3test', 400),
+    ('tone.mp3', b'not audio', 415),
+])
+def test_audio_rejects_invalid_uploads(app, name, content, status):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        upload_mp3(app, name, content)
+    assert error.value.code == status
+    assert app('/api/v1/audio/mp3')['files'] == []
+
+@pytest.mark.parametrize('path,method,status', [
+    ('/api/v1/audio/mp3', 'DELETE', 405),
+    ('/api/v1/audio/mp3/tone', 'GET', 405),
+    ('/api/v1/audio/mp3/invalid.name', 'DELETE', 400),
+    ('/api/v1/audio/mp3', 'POST', 400),
+])
+def test_audio_mp3_rejects_invalid_requests(app, path, method, status):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        app(path, method=method)
+    assert error.value.code == status
+
 def test_authentication_survives_process_restart(app):
     import base64
     app('/api/v1/system',{'authEnabled':True,'authUser':'tester','authPass':'test-password'},'PUT')

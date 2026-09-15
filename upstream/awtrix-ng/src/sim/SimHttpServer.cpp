@@ -231,8 +231,10 @@ struct SimHttpServer::Impl {
   bool serveState(const httplib::Request& req, const std::string& method, httplib::Response& res);
   bool serveSystem(const httplib::Request& req, const std::string& method, httplib::Response& res);
   std::string systemJson(bool withSecrets = false) const;
-  void handleFiles(const httplib::Request& req, const std::string& method, httplib::Response& res);
+  void handleFiles(const httplib::Request& req, const std::string& method, httplib::Response& res,
+                   const std::string& dirOverride = "", const std::string& pathOverride = "");
   void handleSounds(const httplib::Request& req, const std::string& method, httplib::Response& res);
+  void handleMp3(const httplib::Request& req, const std::string& method, httplib::Response& res);
   void handleRestore(const httplib::Request& req, const std::string& method, httplib::Response& res);
   void handleSim(const httplib::Request& req, const std::string& method, httplib::Response& res);
 };
@@ -344,10 +346,49 @@ void SimHttpServer::Impl::handleSounds(const httplib::Request& req, const std::s
   sendError(res, 405, "methodNotAllowed", "allowed method(s): PUT, DELETE");
 }
 
+void SimHttpServer::Impl::handleMp3(const httplib::Request& req, const std::string& method,
+                                    httplib::Response& res) {
+  if (req.path == "/api/v1/audio/mp3") {
+    if (method != "GET" && method != "POST") {
+      sendError(res, 405, "methodNotAllowed", "allowed method(s): GET, POST");
+      return;
+    }
+    if (method == "POST") {
+      if (req.files.empty()) {
+        sendError(res, 400, "invalidFile", "a multipart MP3 file is required");
+        return;
+      }
+      for (const auto& kv : req.files) {
+        const auto& name = kv.second.filename;
+        if (name.find('/') != std::string::npos ||
+            !assets::uploadNameOk("/MP3/" + name)) {
+          sendError(res, 400, "invalidName", "expected an MP3 filename with 1-32 characters of A-Z, a-z, 0-9, _ or -");
+          return;
+        }
+      }
+    }
+    handleFiles(req, method, res, "/MP3");
+  } else {
+    const auto name = req.path.substr(sizeof("/api/v1/audio/mp3/") - 1);
+    const auto path = sound::mp3PathFor(name);
+    if (path.empty()) {
+      sendError(res, 400, "invalidName", "an MP3 is named with 1-32 characters of A-Z, a-z, 0-9, _ or -");
+      return;
+    }
+    if (method != "DELETE") {
+      sendError(res, 405, "methodNotAllowed", "allowed method(s): DELETE");
+      return;
+    }
+    handleFiles(req, method, res, "", path);
+  }
+}
+
 void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::string& method,
-                                      httplib::Response& res) {
+                                      httplib::Response& res, const std::string& dirOverride,
+                                      const std::string& pathOverride) {
   if (method == "GET") {
-    std::string dir = req.has_param("dir") ? req.get_param_value("dir") : "/ICONS";
+    std::string dir = !dirOverride.empty() ? dirOverride :
+        (req.has_param("dir") ? req.get_param_value("dir") : "/ICONS");
     if (dir.empty() || dir[0] != '/') dir = "/" + dir;
     if (dir.find("..") != std::string::npos) {
       sendError(res, 400, "invalidPath", "path traversal rejected");
@@ -377,7 +418,8 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
     return;
   }
   if (method == "POST") {
-    std::string dir = req.has_param("dir") ? req.get_param_value("dir") : "/ICONS";
+    std::string dir = !dirOverride.empty() ? dirOverride :
+        (req.has_param("dir") ? req.get_param_value("dir") : "/ICONS");
     if (dir.empty() || dir[0] != '/') dir = "/" + dir;
     if (dir.find("..") != std::string::npos) {
       sendError(res, 400, "invalidPath", "path traversal rejected");
@@ -404,7 +446,10 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
       }
       std::error_code ec;
       stdfs::create_directories(stdfs::u8path(sim::hostPath(target)).parent_path(), ec);
-      sim::writeFile(sim::hostPath(target), f.content);
+      if (!sim::writeFile(sim::hostPath(target), f.content)) {
+        sendError(res, 507, "insufficientStorage", "could not write the file");
+        return;
+      }
       logf("sim files: uploaded %s (%u B)", target.c_str(),
            static_cast<unsigned>(f.content.size()));
     }
@@ -413,7 +458,8 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
     return;
   }
   if (method == "DELETE") {
-    const std::string fn = req.has_param("path") ? req.get_param_value("path") : "";
+    const std::string fn = !pathOverride.empty() ? pathOverride :
+        (req.has_param("path") ? req.get_param_value("path") : "");
     if (!assets::isWritable(fn)) {
       sendError(res, 400, "invalidPath",
                 "path must be under /ICONS, /MELODIES, /PALETTES or /MP3 and contain no '..'");
@@ -652,6 +698,11 @@ void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response& 
 
   if (path == "/api/v1/audio/melodies" || path.rfind("/api/v1/audio/melodies/", 0) == 0) {
     handleSounds(req, method, res);
+    return;
+  }
+
+  if (path == "/api/v1/audio/mp3" || path.rfind("/api/v1/audio/mp3/", 0) == 0) {
+    handleMp3(req, method, res);
     return;
   }
 

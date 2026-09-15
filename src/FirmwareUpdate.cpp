@@ -14,6 +14,7 @@
 #include <string>
 #include <dirent.h>
 #include <signal.h>
+#include <sched.h>
 
 // The stock GUI leaves this Bluetooth UART helper running after init stops it.
 // Its executable is on /res, so it must exit before that filesystem can unmount.
@@ -77,6 +78,15 @@ int main(int argc,char** argv) {
      info.size!=0x800000 || info.erasesize!=0x10000) {
     std::fprintf(stderr,"Unexpected res flash device\n"); return 1;
   }
+  // AWTRIX isolates its DNS bind mount. Updates must unmount /res in init's
+  // namespace, where the launcher lives, before erasing the underlying flash.
+  int mountNamespace=open("/proc/1/ns/mnt",O_RDONLY|O_CLOEXEC);
+  if(mountNamespace<0 || setns(mountNamespace,CLONE_NEWNS)!=0) {
+    std::perror("Cannot enter system mount namespace; nothing erased");
+    if(mountNamespace>=0) close(mountNamespace);
+    close(flash); close(imageFd); return 1;
+  }
+  close(mountNamespace);
   if(!std::strcmp(argv[1],"--preflight")) {
     std::puts("Preflight passed: valid image, matching 8 MiB NOR res partition; nothing written");
     close(flash); close(imageFd); return 0;

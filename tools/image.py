@@ -111,7 +111,7 @@ def main():
         manifest[name] = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "partition": "res"}
     manifest["upstreamCommit"] = "4ff1de83428ed13cae6e210dfcbf9d186a09bc60"
     manifest["matrix"] = {"width": 52, "height": 16}
-    manifest["version"] = "1.1.0-tc002.4"
+    manifest["version"] = "1.1.0-tc002.5"
     manifest["tls"] = "OpenSSL 3.5.8"
     manifest["status"] = "release-candidate; not cold-boot validated"
     for name in ("awtrix-tc002", "libzkgui.so", "tc002-update"):

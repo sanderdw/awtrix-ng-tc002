@@ -230,3 +230,68 @@ Installed update SHA256
 The updater verified every flash block and rebooted Linux. The installed API
 reports 1.1.0-tc002.4 at 42 FPS; both persistent configuration files are identical
 to their pre-update backups.
+
+## 2026-09-15: Audio page and local MQTT DNS (1.1.0-tc002.5)
+
+Reproduced `GET /api/v1/audio/mp3` returning 404 on the installed clock. Added the
+native list, multipart upload and named deletion routes used by the upstream
+Audio page, with filename/content validation and storage-write error reporting.
+The file handler serves these routes without duplicating uploaded MP3 buffers.
+
+The vendor DHCP properties contained the correct LAN DNS server, but libc read
+the read-only `/etc/resolv.conf`, which listed public DNS servers. AWTRIX now
+bind-mounts a RAM resolver file in a private mount namespace before starting
+hardware or networking threads. It uses DHCP DNS properties or configured static
+DNS servers and refreshes when the network properties change. Other processes
+and the root filesystem retain their original resolver. The update helper joins
+init's mount namespace before preflight/installation so `/res` still unmounts in
+the system namespace before any flash erase.
+
+Validation: the full 122-case pytest suite and both CTests passed. After the final
+file-handler refinement, all 51 platform/image tests passed again. Host and ARM
+builds passed. A physical RAM trial loaded the complete web UI, including Audio,
+without JavaScript errors; MP3 listing/upload/deletion passed without playback.
+The patched application connected to `mqttserver.lan` at `192.168.100.5:1883`.
+The trial restored the installed service and confirmed both persistent
+configuration files were unchanged. The DNS probe also verified the original
+resolver was preserved outside its namespace and restored on cleanup.
+
+Full reboot testing also exposed the vendor launcher's inherited property
+mapping being closed by the port's descriptor cleanup. The loader now preserves
+the read-only descriptor named by `ANDROID_PROPERTY_WORKSPACE` across exec while
+closing hardware descriptors. A new exec regression passed on both the host and
+the clock; all three CTests passed. A normal init-service startup with the
+corrected loader then connected through the broker hostname successfully.
+
+Installed update SHA256:
+`01fe9ac61df09700e25038f08ef6f43be2e65a565bc8813cbc83be84e4d87a8a`.
+The update and stock recovery passed host validation. Physical updater preflight
+passed from both the system and private mount namespaces without writing flash.
+A fresh backup of the installed res partition produced
+`dist/rollback-tc002.4.img`, matching the previously installed `.4` image checksum
+above. The updater wrote and read-back verified the corrected `.5` image, and a
+changed Linux boot ID confirmed a full reboot. The installed web UI, including
+Audio, passed the browser check. MQTT is saved as `mqttserver.lan` and connected
+to `192.168.100.5:1883`, including after a configuration-triggered process restart.
+Device and display settings were preserved across installation; the only
+intentional subsequent configuration change was the broker hostname.
+
+## 2026-09-15: TC002 application title and repository link
+
+The browser title and application heading now read `AWTRIX NG TC002`. The support
+button is replaced by an accessible GitHub link to this repository, opening in a
+new tab. The obsolete support icon, styling and JavaScript handler were removed.
+Browser checks passed at 1360, 390 and 320 pixels wide without JavaScript errors.
+
+Installed branding update SHA256:
+`6ab1eac33182e63dbf87dd802c70df50e31cfd92bd6917c36a98be378e71101b`.
+Application, loader, updater and vendor bootstrap binaries match the preceding
+installed image. The prior image is saved as
+`dist/rollback-tc002.5-before-branding.img`. Device validation passed, but the ADB
+installation command lost connectivity without reporting completion. The owner
+reported the clock display running with flashing connection indicators and no
+web access. After the owner power-cycled the clock, it reconnected. The installed
+`/res/ui/awtrix.html` matched the source byte-for-byte. The full UI browser check
+and desktop/mobile branding checks passed against the clock. All saved device
+and display settings matched the pre-update backup; MQTT connected through
+`mqttserver.lan`, and the application reported 42 FPS.

@@ -194,10 +194,11 @@ std::string wifiSsid() { std::lock_guard<std::mutex> lock(stateMutex); return ss
 bool wifiConnected() { std::lock_guard<std::mutex> lock(stateMutex); return connectedState; }
 bool wifiApMode() { return apMode; }
 void resetWifi() { Wpa wpa; wpa.command("REMOVE_NETWORK all"); wpa.command("SAVE_CONFIG"); }
-void System::stop() { stop_=true; wake_.notify_all(); if(worker_.joinable()) worker_.join(); }
+void System::stop() { stop_=true; wake_.notify_all(); if(worker_.joinable()) worker_.join(); dns_.stop(); }
 System::~System() { stop(); }
 void System::begin(const awtrix::DeviceConfig& cfg) {
   if(!hardwareEnabled()) return;
+  dns_.begin(cfg);
   worker_=std::thread([this,cfg] {
     const auto& ssid=cfg.wifiSsid; const auto& password=cfg.wifiPass; const auto& server=cfg.ntpServer;
     const auto hostname=awtrix::net::effectiveHostname(cfg.hostname,uid());
@@ -229,6 +230,7 @@ void System::begin(const awtrix::DeviceConfig& cfg) {
         initial=false; networkChanged=false;
         dhcpDue=1800;
       }
+      if (connected) dns_.refresh(cfg);
       if(connected) disconnectedSeconds=0;
       else ++disconnectedSeconds;
       if(!apMode && disconnectedSeconds>std::max<long>(15,cfg.wifiConnectTimeout/1000))

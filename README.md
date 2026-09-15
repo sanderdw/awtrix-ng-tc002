@@ -28,7 +28,7 @@ clock's 12-character MAC; it can be changed in System → MQTT.
 
 ## Current status
 
-This **release candidate was installed and verified after a Linux reboot** on the
+This **1.1.0-tc002.5 release candidate was installed and verified after a Linux reboot** on the
 test clock on 2026-09-15. AWTRIX starts automatically from flash, serves the web UI
 on port 80 and stores settings in `/data/awtrix-ng`. See [WORKLOG.md](WORKLOG.md)
 for measured results and outstanding physical checks.
@@ -105,6 +105,14 @@ the bootloader and MCU firmware are preserved.
 Volume and brightness changes use the normal settings persistence and MQTT state
 updates. Physical −/+ labels keep their meaning when the display is rotated;
 rotation and button-swap settings still apply to knob navigation.
+
+## Audio and local DNS fixes (1.1.0-tc002.5)
+
+The Audio page supports listing, uploading and deleting MP3 files through the
+upstream audio API. AWTRIX uses the DNS servers supplied by Wi-Fi DHCP, or the
+configured servers for static addressing, so local broker names can resolve.
+Its resolver file lives in RAM in a private mount namespace; the read-only
+system image and other processes keep their original resolver file.
 
 ## Build on Linux x86-64
 

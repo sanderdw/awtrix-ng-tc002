@@ -1,4 +1,5 @@
 #pragma once
+#include "Tc002Dns.h"
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
@@ -20,6 +21,7 @@ class System {
   void stop();
   void begin(const awtrix::DeviceConfig& config);
  private:
+  Dns dns_;
   std::atomic<bool> stop_{false};
   std::thread worker_;
   std::mutex mutex_;

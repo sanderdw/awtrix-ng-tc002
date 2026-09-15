@@ -12,6 +12,7 @@
 #include <net/if.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include "InheritedProperties.h"
 
 static void* bootstrap;
 void onEasyUIInit(void* context) {
@@ -44,8 +45,8 @@ void onEasyUIInit(void* context) {
     }
     int log=open("/tmp/awtrix-ng.log",O_WRONLY|O_CREAT|O_TRUNC,0600);
     if(log>=0) { dup2(log,1); dup2(log,2); if(log>2) close(log); }
-    /* Vendor initialization opens device descriptors. Exec must release them. */
-    for(int fd=3;fd<1024;++fd) fcntl(fd,F_SETFD,FD_CLOEXEC);
+    /* Release hardware descriptors but preserve the vendor property mapping. */
+    tc002PrepareExecDescriptors();
     if(trial)
       execl(binary,binary,"--hardware","--no-matrix","--data",data,"--webui",ui,
         "--port","18081","--run-for","90",(char*)0);
