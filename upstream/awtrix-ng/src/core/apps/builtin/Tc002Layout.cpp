@@ -136,7 +136,9 @@ bool battery(Canvas& c, const RenderCtx& ctx) {
   const int pct = std::clamp<int>(ctx.runtime->batteryPercent, 0, 100);
   const uint32_t col = ctx.runtime->lowBattery || pct < 20 ? 0xFF2000u :
                        pct < 40 ? 0xFFA000u : 0x00E000u;
-  const uint32_t shell = dim(col, 76);
+  // Temporary TC002 workaround: dim green flickers on one physical LED.
+  // See the README's display flicker note; keep warning colours unchanged.
+  const uint32_t shell = col == 0x00E000u ? 0x007A00u : dim(col, 76);
   c.fillRect(5, 0, 6, 2, shell);
   c.fillRect(5, 2, 2, 2, shell);
   c.fillRect(9, 2, 2, 2, shell);

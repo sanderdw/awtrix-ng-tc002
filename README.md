@@ -35,7 +35,8 @@ for measured results and outstanding physical checks.
 
 Confirmed on TC002 stock app 1.1.1 / MCU V1.0.17:
 
-- Correct, steady 52 × 16 RGB output using the full app; about 42 FPS.
+- Correct 52 × 16 RGB output using the full app; about 42 FPS. See the display
+  flicker note below for a known issue at some green levels.
 - Speaker playback of two sets of three rising notes, confirmed by the owner.
 - MP3 file playback and local HTTP MP3 streaming, checked at zero volume.
 - Battery percentage from the MCU and live Wi-Fi status/scanning.
@@ -58,6 +59,25 @@ humidity sensor; those GPIO controls are hidden. Brightness remains adjustable.
 Sleep blanks the panel and pauses services for the requested duration; it does
 **not** enter ESP32-style deep sleep. Reboot restarts AWTRIX's process. Linux,
 the bootloader and MCU firmware are preserved.
+
+### Display flicker workaround (2026-09-15)
+
+The owner observed a flickering green LED on the bottom row, pixel 5 from the
+left, while showing the battery app. The web preview stays steady. Palette tests
+also reproduce it with RGB **0, 66, 0** (`#004200`) and **0, 75, 0** (`#004B00`),
+including at maximum brightness. The cause is still unknown: the display driver,
+panel or controller needs further investigation.
+
+As a temporary workaround, the native battery icon's green border uses RGB
+**0, 122, 0** (`#007A00`), the owner's chosen level where the flicker is no longer
+visible. These are colours before brightness and gamma processing. Battery fill
+and red/orange warning colours retain their existing behaviour. This masks the
+observed symptom; it does not fix the underlying cause or other affected colours.
+
+Investigation is deferred. Next, compare the same colours and physical LED with
+the original stock firmware. The stock restore was paused before any flashing;
+the original stock recovery and a current AWTRIX/configuration backup are saved
+locally.
 
 ## Display sizing (1.1.0-tc002.3)
 
