@@ -1,8 +1,12 @@
 """Static checks on the shipped web UI that need no clock or browser."""
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-UI = (ROOT / 'upstream/awtrix-ng/webui/index.html').read_text(encoding='utf-8')
+sys.path.insert(0, str(ROOT / 'tools'))
+from paths import webui  # noqa: E402
+
+UI = webui().read_text(encoding='utf-8')
 
 
 def test_upstream_support_button_is_present():

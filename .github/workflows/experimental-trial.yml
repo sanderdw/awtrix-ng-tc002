@@ -21,6 +21,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: true
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: '0.12.14'
@@ -39,9 +40,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libssl-dev perl curl xz-utils
-      - name: Build and test on the host
+      - name: Apply the TC002 patch series to pristine upstream
         run: |
           uv sync --locked
+          uv run tools/upstream.py apply
+          uv run tools/upstream.py status
+          cp -r patches "$RUNNER_TEMP/patches-before"
+          uv run tools/upstream.py export
+          diff -r "$RUNNER_TEMP/patches-before" patches
+      - name: Build and test on the host
+        run: |
           uv run cmake -S . -B build-host -G Ninja -DCMAKE_BUILD_TYPE=Release
           uv run cmake --build build-host -j4
           uv run ctest --test-dir build-host --output-on-failure

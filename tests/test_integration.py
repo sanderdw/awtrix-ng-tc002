@@ -16,6 +16,8 @@ import paho.mqtt.client as mqtt
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/'tools'))
+from paths import webui  # noqa: E402
 
 
 def port():
@@ -140,7 +142,7 @@ def device(tmp_path_factory):
             device_adb("shell", "mkdir -p /tmp/awtrix-integration-data", stdout=fw_log)
             device_adb("push", str(folder/"device.json"), "/tmp/awtrix-integration-data/device.json", stdout=fw_log)
             device_adb("push", str(binary), "/tmp/awtrix-integration-bin", stdout=fw_log)
-            device_adb("push", str(ROOT/"upstream/awtrix-ng/webui/index.html"), "/tmp/awtrix-integration.html", stdout=fw_log)
+            device_adb("push", str(webui()), "/tmp/awtrix-integration.html", stdout=fw_log)
             # EXIT restores the stock service even if the native app fails. The
             # run-for bound also restores it if the test client disconnects.
             command = "trap 'setprop ctl.start zkswe' EXIT; setprop ctl.stop zkswe; " \
@@ -150,7 +152,7 @@ def device(tmp_path_factory):
             firmware = subprocess.Popen([adb,"-s",serial,"shell",command], stdout=fw_log, stderr=subprocess.STDOUT)
         else:
             firmware = subprocess.Popen([str(binary), "--no-matrix", "--data", str(folder),
-                "--webui", str(ROOT/"upstream/awtrix-ng/webui/index.html"), "--port", str(http_port)],
+                "--webui", str(webui()), "--port", str(http_port)],
                 stdout=fw_log, stderr=subprocess.STDOUT)
         d = Device(client, messages, http_port)
         if serial:

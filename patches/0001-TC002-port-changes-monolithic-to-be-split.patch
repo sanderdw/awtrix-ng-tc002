@@ -1,0 +1,2496 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <sanderdw@gmail.com>
+Date: Wed, 16 Sep 2026 16:03:57 +0200
+Subject: [PATCH 1/1] TC002 port changes (monolithic, to be split)
+
+
+diff --git a/src/core/api/CapabilitiesJson.h b/src/core/api/CapabilitiesJson.h
+index 58225ba..93654c3 100644
+--- a/src/core/api/CapabilitiesJson.h
++++ b/src/core/api/CapabilitiesJson.h
+@@ -33,7 +33,12 @@ inline std::string capabilitiesJson(const std::vector<std::string>& effects,
+          ",\"audio\":{\"buzzer\":" +
+          flag(audio.buzzer) + ",\"track\":" + flag(audio.track) + ",\"mp3\":" + flag(audio.mp3) +
+          ",\"radio\":" + flag(audio.radio) + "}" +
++#ifdef AWTRIX_TC002
++         ",\"matrix\":{\"width\":52,\"height\":16,\"fixed\":true}"
++         ",\"gpio\":{\"soc\":\"ssd202d\",\"fixed\":true,\"input\":[],\"output\":[],\"adc\":[],\"rtc\":[]}}";
++#else
+          ",\"gpio\":" + pins::toJson(pins::activeProfile()) + "}";
++#endif
+ }
+ 
+ }
+diff --git a/src/core/apps/IApp.h b/src/core/apps/IApp.h
+index 4fb7fee..ef24a9f 100644
+--- a/src/core/apps/IApp.h
++++ b/src/core/apps/IApp.h
+@@ -30,6 +30,8 @@ class IApp {
+   virtual ~IApp() = default;
+   virtual const std::string& id() const = 0;
+   virtual void render(Canvas& canvas, const RenderCtx& ctx) = 0;
++  virtual bool renderNative(Canvas&, const RenderCtx&) { return false; }
++  virtual bool usesNativeCanvas() const { return false; }
+ };
+ 
+ }
+diff --git a/src/core/apps/SpecRenderer.cpp b/src/core/apps/SpecRenderer.cpp
+index 3da4e0e..c46ec05 100644
+--- a/src/core/apps/SpecRenderer.cpp
++++ b/src/core/apps/SpecRenderer.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include "core/StrCase.h"
+ #include "core/render/Color.h"
++#include "core/render/DisplayScale.h"
+ #include "core/render/Gfx2d.h"
+ #include "core/render/ScrollText.h"
+ #include "core/render/TextEncoding.h"
+@@ -18,7 +19,6 @@ namespace render {
+ namespace {
+ 
+ constexpr int kBaseline = kTextBaseline;
+-constexpr int kIconTextGap = 8;
+ 
+ std::string maybeUpper(const std::string& in, TextCase tc, bool globalUppercase) {
+   const bool up = (tc == TextCase::Upper) || (tc == TextCase::Inherit && globalUppercase);
+@@ -71,7 +71,7 @@ const ColorRamp* rampFor(const AppSpecExtras& x, bool wanted) {
+ }
+ 
+ void renderProgress(Canvas& c, const AppSpec& s, int iconWidth) {
+-  const int x0 = iconWidth > 0 ? kIconTextGap : 0;
++  const int x0 = iconWidth;
+   const AppSpecExtras& x = s.extras();
+   const ColorSource fill(x.progressColor, rampFor(x, x.progressUsesPalette));
+   drawProgress(c, x.progress, fill, x.progressTrackColor, x0);
+@@ -136,7 +136,7 @@ void renderText(Canvas& c, const AppSpec& s, const GfxFont& font, uint32_t color
+     paint.glyphCount = fragColors.size();
+   }
+ 
+-  drawScrollRun(c, font, x, kBaseline, hasFragments ? fragRun : textStr, total, paint, r.scroll);
++  drawScrollRun(c, font, x, kBaseline * displayTextScale(c.height()), hasFragments ? fragRun : textStr, total, paint, r.scroll);
+ }
+ 
+ }
+@@ -161,11 +161,11 @@ void renderSpec(Canvas& c, const AppSpec& s, const GfxFont& font, const SpecRend
+   }
+   const uint32_t textColor = s.hasTextColor ? s.textColor : r.defaultTextColor;
+   if (s.textInFront) {
+-    renderDecorations(c, s, font, textColor, r.iconWidth);
++    renderDecorations(c, s, r.drawFont ? *r.drawFont : font, textColor, r.iconWidth);
+     renderText(c, s, font, textColor, r);
+   } else {
+     renderText(c, s, font, textColor, r);
+-    renderDecorations(c, s, font, textColor, r.iconWidth);
++    renderDecorations(c, s, r.drawFont ? *r.drawFont : font, textColor, r.iconWidth);
+   }
+   // Dark red frame marks an app that outlived its lifetime and was kept rather than removed.
+   if (s.lifeTimeEnd) c.drawRect(0, 0, c.width(), c.height(), 0x6e0700u);
+diff --git a/src/core/apps/SpecRenderer.h b/src/core/apps/SpecRenderer.h
+index 4ef3285..b1dad71 100644
+--- a/src/core/apps/SpecRenderer.h
++++ b/src/core/apps/SpecRenderer.h
+@@ -12,6 +12,7 @@ namespace awtrix {
+ namespace render {
+ 
+ struct SpecRender {
++  const GfxFont* drawFont = nullptr;
+   uint32_t defaultTextColor = 0xFFFFFFu;
+   int iconWidth = 0;
+   int64_t nowMs = 0;
+diff --git a/src/core/apps/builtin/BatteryApp.h b/src/core/apps/builtin/BatteryApp.h
+index ed42a9d..632799d 100644
+--- a/src/core/apps/builtin/BatteryApp.h
++++ b/src/core/apps/builtin/BatteryApp.h
+@@ -3,6 +3,7 @@
+ #include <cstdint>
+ 
+ #include "core/apps/IApp.h"
++#include "core/apps/builtin/Tc002Layout.h"
+ #include "core/apps/SensorFormat.h"
+ #include "core/apps/builtin/ContentFrame.h"
+ #include "core/render/Color.h"
+@@ -13,6 +14,9 @@ namespace awtrix {
+ class BatteryApp : public IApp {
+  public:
+   const std::string& id() const override { return id_; }
++#ifdef AWTRIX_TC002
++  bool renderNative(Canvas& c, const RenderCtx& ctx) override { return tc002layout::battery(c, ctx); }
++#endif
+   void render(Canvas& c, const RenderCtx& ctx) override {
+     const Settings& s = *ctx.settings;
+     int pct = ctx.runtime->batteryPercent;
+diff --git a/src/core/apps/builtin/DateApp.h b/src/core/apps/builtin/DateApp.h
+index f5c9b5d..f39a2a5 100644
+--- a/src/core/apps/builtin/DateApp.h
++++ b/src/core/apps/builtin/DateApp.h
+@@ -2,6 +2,7 @@
+ 
+ #include "core/apps/ClockText.h"
+ #include "core/apps/IApp.h"
++#include "core/apps/builtin/Tc002Layout.h"
+ #include "core/apps/builtin/ContentFrame.h"
+ #include "core/apps/builtin/WeekdayBar.h"
+ #include "core/render/TextRenderer.h"
+@@ -11,6 +12,9 @@ namespace awtrix {
+ class DateApp : public IApp {
+  public:
+   const std::string& id() const override { return id_; }
++#ifdef AWTRIX_TC002
++  bool renderNative(Canvas& c, const RenderCtx& ctx) override { return tc002layout::date(c, ctx); }
++#endif
+ 
+   void render(Canvas& c, const RenderCtx& ctx) override {
+     const Settings& s = *ctx.settings;
+diff --git a/src/core/apps/builtin/Tc002Layout.cpp b/src/core/apps/builtin/Tc002Layout.cpp
+new file mode 100644
+index 0000000..70d93c0
+--- /dev/null
++++ b/src/core/apps/builtin/Tc002Layout.cpp
+@@ -0,0 +1,186 @@
++#include "core/apps/builtin/Tc002Layout.h"
++
++#include <algorithm>
++#include <string>
++#include <vector>
++
++#include "core/apps/IApp.h"
++#include "core/apps/ClockText.h"
++#include "core/apps/SensorFormat.h"
++#include "core/apps/builtin/WeekdayBar.h"
++#include "core/render/TextEncoding.h"
++#include "core/render/TextRenderer.h"
++
++namespace awtrix::tc002layout {
++namespace {
++
++bool supported(const Canvas& c) { return c.width() == 52 && c.height() == 16; }
++
++// Draw directly in physical pixels. Every source font pixel is exactly 2x2;
++// text layout never resamples a complete framebuffer by a fractional factor.
++void glyph2(Canvas& c, const GfxFont& font, char ch, int x, int baseline, uint32_t rgb) {
++  const FontGlyph* g = text::glyphFor(font, static_cast<unsigned char>(ch));
++  if (!g) return;
++  for (int y = 0; y < g->height; ++y)
++    for (int col = 0; col < g->width; ++col) {
++      const int bit = y * g->width + col;
++      if (font.bitmap[g->bitmapOffset + bit / 8] & (0x80 >> (bit % 8)))
++        c.fillRect(x + (g->xOffset + col) * 2, baseline + (g->yOffset + y) * 2, 2, 2, rgb);
++    }
++}
++
++bool punctuation(char ch) { return ch == '.' || ch == '/' || ch == '-' || ch == ':'; }
++
++struct TextLine {
++  std::string text;
++  std::vector<int> positions;
++  int left = 0, right = -1;
++  int width() const { return right - left + 1; }
++};
++
++TextLine line(const GfxFont& font, const std::string& text, bool compact = false) {
++  TextLine out;
++  out.text = text;
++  int x = 0;
++  bool ink = false;
++  for (std::size_t i = 0; i < text.size(); ++i) {
++    // One physical column on each side of date separators, two between digits.
++    if (compact && i && (punctuation(text[i]) || punctuation(text[i - 1]))) --x;
++    out.positions.push_back(x);
++    const auto m = text::measure(font, std::string(1, text[i]));
++    if (m.hasInk()) {
++      if (!ink) out.left = x + m.inkLeft * 2;
++      out.right = x + m.inkRight * 2 + 1;
++      ink = true;
++    }
++    x += text::charAdvance(font, static_cast<unsigned char>(text[i])) * 2;
++  }
++  return out;
++}
++
++void drawLine(Canvas& c, const GfxFont& font, const TextLine& line, int x, int baseline,
++              uint32_t rgb, uint32_t separator) {
++  for (std::size_t i = 0; i < line.text.size(); ++i)
++    glyph2(c, font, line.text[i], x + line.positions[i], baseline,
++           line.text[i] == ':' ? separator : rgb);
++}
++
++void centered(Canvas& c, const GfxFont& font, const TextLine& line, int x, int width,
++              int baseline, uint32_t rgb, uint32_t separator) {
++  drawLine(c, font, line, x + (width - line.width()) / 2 - line.left, baseline, rgb, separator);
++}
++
++void weekdays(Canvas& c, const RenderCtx& ctx, int x, int y, int markerWidth) {
++  const auto& cfg = ctx.settings->weekdayBar;
++  if (!cfg.show) return;
++  for (int i = 0; i < 7; ++i)
++    c.fillRect(x + i * (markerWidth + 1), y, markerWidth, 2,
++               weekdayBarColor(cfg, i, ctx.weekday));
++}
++
++uint32_t dim(uint32_t rgb, unsigned level) {
++  return (((rgb >> 16 & 255) * level / 255) << 16) |
++         (((rgb >> 8 & 255) * level / 255) << 8) | ((rgb & 255) * level / 255);
++}
++}
++
++bool time(Canvas& c, const RenderCtx& ctx) {
++  if (!supported(c)) return false;
++  const auto& s = *ctx.settings;
++  if (s.timeMode < 0 || s.timeMode > 4) return false;
++  const bool calendar = s.timeMode != 0;
++  const bool top = s.timeMode == 2 || s.timeMode == 4;
++  auto options = timeOptionsFrom(s);
++  if (calendar) options.showSeconds = options.showAmPm = false;
++  std::string label;
++  for (const auto& run : buildTimeRuns(options, ctx.hour, ctx.minute, ctx.second)) label += run.text;
++  const int area = calendar ? 34 : 52;
++  auto textLine = line(*ctx.font, label);
++  if (textLine.width() > area) textLine = line(*ctx.font, label, true);
++  if (textLine.width() > area) return false;
++  c.clear();
++  if (calendar) {
++    c.fillRect(0, 0, 16, 16, s.calendarBodyColor);
++    if (s.timeMode <= 2) c.fillRect(0, 0, 16, 2, s.calendarHeaderColor);
++    else {
++      c.fillRect(2, 0, 4, 2, 0);
++      c.fillRect(10, 0, 4, 2, 0);
++    }
++    const auto day = line(*ctx.font, std::to_string(ctx.mday));
++    centered(c, *ctx.font, day, 0, 16, 14, s.calendarTextColor, s.calendarTextColor);
++  }
++  const uint32_t col = s.timeColor.valueOr(s.textColor);
++  const uint32_t sep = scaleColor(col, separatorLevel(s.timeSeparatorMode, ctx.second, ctx.nowMs));
++  const int baseline = s.weekdayBar.show ? (top ? 14 : 12) : 13;
++  centered(c, *ctx.font, textLine, calendar ? 17 : 0, area, baseline, col, sep);
++  weekdays(c, ctx, calendar ? 17 : 2, top ? 0 : 14, calendar ? 4 : 6);
++  return true;
++}
++
++bool date(Canvas& c, const RenderCtx& ctx) {
++  if (!supported(c)) return false;
++  const auto& s = *ctx.settings;
++  const auto textLine = line(*ctx.font,
++    buildDateText(s, ctx.weekday, ctx.mday, ctx.month, ctx.year), true);
++  if (textLine.width() > c.width()) return false;
++  c.clear();
++  const uint32_t col = s.dateColor.valueOr(s.textColor);
++  centered(c, *ctx.font, textLine, 0, 52, s.weekdayBar.show ? 12 : 13, col, col);
++  weekdays(c, ctx, 2, 14, 6);
++  return true;
++}
++
++bool volume(Canvas& c, const GfxFont& font, int percent) {
++  if (!supported(c)) return false;
++  c.clear();
++  const int pct = std::clamp(percent, 0, 100);
++  constexpr uint32_t color = 0xFFFFFFu;
++  constexpr int x = 4;
++  // Speaker cone and either sound waves or a mute cross, in physical pixels.
++  c.fillRect(x, 6, 4, 4, color);
++  c.fillRect(x + 4, 4, 2, 8, color);
++  c.fillRect(x + 6, 2, 2, 12, color);
++  if (pct) {
++    c.fillRect(x + 10, 6, 2, 4, color);
++    c.fillRect(x + 12, 2, 2, 2, color);
++    c.fillRect(x + 14, 4, 2, 8, color);
++    c.fillRect(x + 12, 12, 2, 2, color);
++  } else {
++    c.drawLine(x + 10, 5, x + 15, 10, color);
++    c.drawLine(x + 10, 10, x + 15, 5, color);
++  }
++  auto label = line(font, formatBattery(pct));
++  // The shifted 100% label needs one less column before '%' to fit the panel.
++  if (pct == 100) {
++    --label.positions.back();
++    --label.right;
++  }
++  centered(c, font, label, x + 17, 34, 13, color, color);
++  return true;
++}
++
++bool battery(Canvas& c, const RenderCtx& ctx) {
++  if (!supported(c)) return false;
++  c.clear();
++  const int pct = std::clamp<int>(ctx.runtime->batteryPercent, 0, 100);
++  const uint32_t col = ctx.runtime->lowBattery || pct < 20 ? 0xFF2000u :
++                       pct < 40 ? 0xFFA000u : 0x00E000u;
++  // Temporary TC002 workaround: dim green flickers on one physical LED.
++  // See the README's display flicker note; keep warning colours unchanged.
++  const uint32_t shell = col == 0x00E000u ? 0x007A00u : dim(col, 76);
++  c.fillRect(5, 0, 6, 2, shell);
++  c.fillRect(5, 2, 2, 2, shell);
++  c.fillRect(9, 2, 2, 2, shell);
++  c.fillRect(3, 2, 2, 14, shell);
++  c.fillRect(11, 2, 2, 14, shell);
++  c.fillRect(3, 14, 10, 2, shell);
++  const int rows[6][3] = {{5,12,6}, {5,10,6}, {5,8,6}, {5,6,6}, {5,4,6}, {7,2,2}};
++  const int full = pct * 6 / 100, remainder = pct * 6 % 100;
++  for (int i = 0; i < full; ++i) c.fillRect(rows[i][0], rows[i][1], rows[i][2], 2, col);
++  if (full < 6 && remainder)
++    c.fillRect(rows[full][0], rows[full][1], rows[full][2], 2, dim(col, 128 + remainder * 127 / 100));
++  const uint32_t textCol = ctx.settings->batteryColor.valueOr(ctx.settings->textColor);
++  centered(c, *ctx.font, line(*ctx.font, formatBattery(pct)), 17, 34, 13, textCol, textCol);
++  return true;
++}
++}
+diff --git a/src/core/apps/builtin/Tc002Layout.h b/src/core/apps/builtin/Tc002Layout.h
+new file mode 100644
+index 0000000..14b4aaa
+--- /dev/null
++++ b/src/core/apps/builtin/Tc002Layout.h
+@@ -0,0 +1,15 @@
++#pragma once
++
++namespace awtrix {
++class Canvas;
++struct RenderCtx;
++struct GfxFont;
++namespace tc002layout {
++// Return false for layouts outside the approved native presentation, so the
++// caller can retain the existing renderer for those modes and formats.
++bool time(Canvas& c, const RenderCtx& ctx);
++bool date(Canvas& c, const RenderCtx& ctx);
++bool battery(Canvas& c, const RenderCtx& ctx);
++bool volume(Canvas& c, const GfxFont& font, int percent);
++}
++}
+diff --git a/src/core/apps/builtin/TimeApp.h b/src/core/apps/builtin/TimeApp.h
+index d49820a..7997956 100644
+--- a/src/core/apps/builtin/TimeApp.h
++++ b/src/core/apps/builtin/TimeApp.h
+@@ -7,6 +7,7 @@
+ 
+ #include "core/apps/ClockText.h"
+ #include "core/apps/IApp.h"
++#include "core/apps/builtin/Tc002Layout.h"
+ #include "core/apps/builtin/ContentFrame.h"
+ #include "core/apps/builtin/WeekdayBar.h"
+ #include "core/render/TextRenderer.h"
+@@ -40,6 +41,9 @@ inline constexpr uint32_t kBinOff = 0xFFFFFFu;
+ class TimeApp : public IApp {
+  public:
+   const std::string& id() const override { return id_; }
++#ifdef AWTRIX_TC002
++  bool renderNative(Canvas& c, const RenderCtx& ctx) override { return tc002layout::time(c, ctx); }
++#endif
+ 
+   void render(Canvas& c, const RenderCtx& ctx) override {
+     const Settings& s = *ctx.settings;
+diff --git a/src/core/effects/effects/MoreEffects.h b/src/core/effects/effects/MoreEffects.h
+index 70f4691..95965db 100644
+--- a/src/core/effects/effects/MoreEffects.h
++++ b/src/core/effects/effects/MoreEffects.h
+@@ -1,3 +1,4 @@
++#include "core/render/DisplayScale.h"
+ #pragma once
+ 
+ #include <cstdint>
+@@ -250,6 +251,14 @@ inline void SwirlOutEffect::render(Canvas& c, int64_t f) {
+ }
+ 
+ inline void LookingEyesEffect::render(Canvas& c, int64_t f) {
++#ifdef AWTRIX_TC002
++  if (c.height() == 16) {
++    Canvas legacy(c.width() / 2, 8);
++    render(legacy, f);
++    fitCanvas(legacy, c);
++    return;
++  }
++#endif
+   c.clear(0x000000u);
+   // 8x8 ball per eye, drawn row by row instead of from a bitmap: x offset and width of each row.
+   static const uint8_t kBallX[8] = {2, 1, 0, 0, 0, 0, 1, 2};
+diff --git a/src/core/render/BootScreen.cpp b/src/core/render/BootScreen.cpp
+index f6d2cce..59a1e4b 100644
+--- a/src/core/render/BootScreen.cpp
++++ b/src/core/render/BootScreen.cpp
+@@ -1,3 +1,4 @@
++#include "core/render/DisplayScale.h"
+ #include "core/render/BootScreen.h"
+ 
+ #include <algorithm>
+@@ -281,6 +282,14 @@ void drawStars(Canvas& c, int64_t nowMs) {
+ // The intro in order: sparks fly up and assemble the AWTRIX wordmark, it holds, the NG block drops
+ // onto it and crushes it, then the block ignites and a shockwave rings out.
+ void drawBootLogo(Canvas& c, const GfxFont& font, int64_t startMs, int64_t nowMs) {
++#ifdef AWTRIX_TC002
++  if (c.height() == 16) {
++    Canvas legacy(32, 8);
++    drawBootLogo(legacy, font, startMs, nowMs);
++    fitCanvas(legacy, c);
++    return;
++  }
++#endif
+   const int64_t t = elapsed(startMs, nowMs);
+   c.clear(color::kBlack);
+   if (t < kRiseEndMs) {
+@@ -302,6 +311,14 @@ void drawBootLogo(Canvas& c, const GfxFont& font, int64_t startMs, int64_t nowMs
+ 
+ bool drawBootAddress(Canvas& c, const GfxFont& font, const std::string& address, int64_t startMs,
+                      int64_t nowMs) {
++#ifdef AWTRIX_TC002
++  if (c.height() == 16) {
++    Canvas legacy(32, 8);
++    const bool active = drawBootAddress(legacy, font, address, startMs, nowMs);
++    fitCanvas(legacy, c);
++    return active;
++  }
++#endif
+   const ColorRamp& ramp = logoRamp();
+   const int origin = ramp.originAt(nowMs, kRampSpanPx);
+   const int tail = kNgWidth + kAddressGapPx;
+diff --git a/src/core/render/DisplayScale.h b/src/core/render/DisplayScale.h
+new file mode 100644
+index 0000000..b30dbe1
+--- /dev/null
++++ b/src/core/render/DisplayScale.h
+@@ -0,0 +1,24 @@
++#pragma once
++
++#include "core/render/Canvas.h"
++
++namespace awtrix {
++
++// Nearest-neighbour presentation keeps LED art sharp. Explicit drawing coordinates
++// remain physical pixels; only legacy built-in layouts use a fitted canvas.
++inline void fitCanvas(const Canvas& source, Canvas& target) {
++  for (int y = 0; y < target.height(); ++y)
++    for (int x = 0; x < target.width(); ++x)
++      target.setPixel(x, y, source.getPixel(x * source.width() / target.width(),
++                                          y * source.height() / target.height()));
++}
++
++inline int displayTextScale(int height) {
++#ifdef AWTRIX_TC002
++  return height >= 16 ? 2 : 1;
++#else
++  return 1;
++#endif
++}
++
++}
+diff --git a/src/core/render/Gfx2d.cpp b/src/core/render/Gfx2d.cpp
+index 06c40ae..ff40557 100644
+--- a/src/core/render/Gfx2d.cpp
++++ b/src/core/render/Gfx2d.cpp
+@@ -1,3 +1,4 @@
++#include "core/render/DisplayScale.h"
+ #include "core/render/Gfx2d.h"
+ 
+ #include <algorithm>
+@@ -45,16 +46,17 @@ void drawProgress(Canvas& c, int pct, const ColorSource& fill, uint32_t track, i
+   const int filled = (prog * w) / 100;
+   const float span = static_cast<float>(w > 1 ? w - 1 : 1);
+   for (int x = 0; x < w; ++x)
+-    c.setPixel(x0 + x, y, x < filled ? fill.at(static_cast<float>(x) / span) : track);
++    c.fillRect(x0 + x, y - displayTextScale(c.height()) + 1, 1, displayTextScale(c.height()),
++               x < filled ? fill.at(static_cast<float>(x) / span) : track);
+ }
+ 
+ void drawBars(Canvas& c, const std::vector<int>& values, const ColorSource& color, bool autoscale,
+               int x0) {
+-  const int n = static_cast<int>(chartCount(values));
+-  if (n == 0) return;
+-  const ChartRange range = chartRange(values, n, autoscale);
++  const int count = static_cast<int>(chartCount(values));
+   const int avail = c.width() - x0;
+-  const int barW = std::max(1, (avail - (n - 1)) / n);
++  const int n = std::min(count, avail);
++  if (n <= 0) return;
++  const ChartRange range = chartRange(values, count, autoscale);
+   const auto level = [&](int v) {
+     const int l = ((v - range.min) * c.height()) / range.span();
+     return std::min(std::max(l, 0), c.height());
+@@ -62,10 +64,13 @@ void drawBars(Canvas& c, const std::vector<int>& values, const ColorSource& colo
+   // Bars grow away from wherever zero lands, so negative values hang below the baseline.
+   const int zero = level(0);
+   for (int i = 0; i < n; ++i) {
+-    const int l = level(values[i]);
++    const int sample = n > 1 ? i * (count - 1) / (n - 1) : count - 1;
++    const int l = level(values[sample]);
+     const int top = c.height() - std::max(l, zero);
+     const int h = std::abs(l - zero);
+-    c.fillRect(x0 + i * (barW + 1), top, barW, h, color.at(chartT(values[i], range)));
++    const int left = i * avail / n, right = (i + 1) * avail / n;
++    const int gap = i + 1 < n ? std::min(displayTextScale(c.height()), right - left - 1) : 0;
++    c.fillRect(x0 + left, top, right - left - gap, h, color.at(chartT(values[sample], range)));
+   }
+ }
+ 
+diff --git a/src/core/render/MatrixLayout.h b/src/core/render/MatrixLayout.h
+index 415a80f..861ab38 100644
+--- a/src/core/render/MatrixLayout.h
++++ b/src/core/render/MatrixLayout.h
+@@ -7,7 +7,11 @@
+ 
+ namespace awtrix {
+ 
++#ifdef AWTRIX_TC002
++inline constexpr int kMatrixHeight = 16;
++#else
+ inline constexpr int kMatrixHeight = 8;
++#endif
+ inline constexpr int kMatrixWidthMin = 32;
+ inline constexpr int kMatrixWidthMax = 128;
+ 
+@@ -36,7 +40,11 @@ inline std::string enumNameChoices(const char* const* names, int count) {
+ }
+ 
+ struct MatrixLayout {
++#ifdef AWTRIX_TC002
++  int panelWidth = 52;
++#else
+   int panelWidth = 32;
++#endif
+   int panels = 1;
+   PanelStart panelStart = PanelStart::TopLeft;
+   Wiring panelWiring = Wiring::Rows;
+diff --git a/src/core/render/ProvisioningScreen.cpp b/src/core/render/ProvisioningScreen.cpp
+index 0a5bd83..a7361f5 100644
+--- a/src/core/render/ProvisioningScreen.cpp
++++ b/src/core/render/ProvisioningScreen.cpp
+@@ -1,3 +1,4 @@
++#include "core/render/DisplayScale.h"
+ #include "core/render/ProvisioningScreen.h"
+ 
+ #include "core/render/HsvText.h"
+@@ -6,6 +7,14 @@ namespace awtrix {
+ namespace render {
+ 
+ void drawProvisioningScreen(Canvas& c, const GfxFont& font, int64_t nowMs) {
++#ifdef AWTRIX_TC002
++  if (c.height() == 16) {
++    Canvas legacy(32, 8);
++    drawProvisioningScreen(legacy, font, nowMs);
++    fitCanvas(legacy, c);
++    return;
++  }
++#endif
+   c.clear(0x000000u);
+   drawHsvText(c, font, 2, 6, "AP MODE", nowMs);
+ }
+diff --git a/src/core/render/RenderPipeline.cpp b/src/core/render/RenderPipeline.cpp
+index d998fdc..8984ef7 100644
+--- a/src/core/render/RenderPipeline.cpp
++++ b/src/core/render/RenderPipeline.cpp
+@@ -7,6 +7,7 @@
+ #include "core/CoreEngine.h"
+ #include "core/apps/SpecRenderer.h"
+ #include "core/render/StatusPixels.h"
++#include "core/render/DisplayScale.h"
+ #include "core/render/TransitionComposer.h"
+ 
+ namespace awtrix {
+@@ -15,8 +16,6 @@ using render::drawLinkStatus;
+ using render::pulse;
+ 
+ namespace {
+-// Icons are 8 px wide; text starts one column further right.
+-constexpr int kIconWidth = 9;
+ const std::string kNoIcon;
+ constexpr long kDefaultTransMs = 1000;
+ constexpr long kIconRetryMs = 5000;
+@@ -24,6 +23,8 @@ constexpr long kIconRetryMs = 5000;
+ 
+ RenderPipeline::RenderPipeline(int width, int height, const RenderPipelineDeps& deps)
+     : d_(deps), width_(width), height_(height) {
++  for (int i = 0; i < kFontCount; ++i)
++    if (d_.fonts[i]) scaledFonts_[i].reset(*d_.fonts[i], displayTextScale(height));
+   slotA_.icon = d_.icons;
+   slotB_.icon = d_.iconsB;
+ }
+@@ -50,9 +51,13 @@ bool RenderPipeline::iconIsFullScreen(const PageSlot* slot, int canvasWidth) con
+   return slot && slot->valid && slot->icon && slot->icon->width() >= canvasWidth;
+ }
+ 
+-// How far left the icon is dragged by scrolling text. The icon rides along with the text until it
+-// has been pushed a full icon width off the left edge, then stays there.
++int RenderPipeline::iconColumns(const PageSlot& slot) const {
++  return slot.valid && slot.icon ? std::min(width_, slot.icon->width() + displayTextScale(height_)) : 0;
++}
++
++// The icon rides with scrolling text until it is completely off the left edge.
+ int RenderPipeline::iconShift(const AppSpec& spec, const PageSlot& slot) const {
++  const int kIconWidth = iconColumns(slot);
+   if (spec.iconMode == IconMode::Fixed || spec.icon.empty()) return 0;
+   if (slot.iconPushed && spec.iconMode == IconMode::PushOnce) return -kIconWidth;
+   const float tx = slot.scroll.x();
+@@ -80,7 +85,8 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+     const bool fullScreen = iconIsFullScreen(slot, dst.width());
+     render::SpecRender r;
+     r.defaultTextColor = s.textColor;
+-    r.iconWidth = (spec.icon.empty() || !(slot && slot->valid) || fullScreen) ? 0 : kIconWidth;
++    r.drawFont = d_.fonts[static_cast<uint8_t>(spec.font) < kFontCount ? static_cast<uint8_t>(spec.font) : 0];
++    r.iconWidth = (spec.icon.empty() || !(slot && slot->valid) || fullScreen) ? 0 : iconColumns(*slot);
+     r.backgroundDrawn = fullScreen;
+     r.nowMs = nowMs;
+     r.textX = slot ? slot->scroll.x() : 0.0f;
+@@ -92,7 +98,10 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+     es.hasSpeed = spec.extras().hasEffectSpeed;
+     es.ramp = spec.extras().palette;
+     if (r.effect) r.effect->setSettings(es);
+-    if (fullScreen) slot->icon->blit(dst, 0);
++    if (fullScreen) {
++      dst.clear(spec.hasBackgroundColor ? spec.backgroundColor : 0x000000u);
++      slot->icon->blit(dst, 0);
++    }
+     render::renderSpec(dst, spec, fontFor(&spec), r);
+     if (r.iconWidth && slot && slot->valid)
+       slot->icon->blit(dst, spec.iconOffsetX + iconShift(spec, *slot));
+@@ -108,11 +117,29 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+     RenderCtx ctx;
+     ctx.settings = &s;
+     ctx.runtime = &rt;
+-    ctx.font = &fontFor(nullptr);
++    ctx.font = d_.fonts[0];
+     ctx.fonts[0] = d_.fonts[0];
+     ctx.fonts[1] = d_.fonts[1];
+     d_.clock->fill(ctx, nowMs);
+-    app->render(dst, ctx);
++#ifdef AWTRIX_TC002
++    if (app->renderNative(dst, ctx)) {
++      // Native built-in layouts already use physical pixel coordinates.
++    } else if (!app->usesNativeCanvas() && dst.height() == 16) {
++      // Give date/time formats room to expand before fitting them. Rendering
++      // directly into 32 columns would crop weekday names and four-digit years.
++      Canvas legacy(128, 8);
++      app->render(legacy, ctx);
++      int halfWidth = 16;
++      for (int y = 0; y < legacy.height(); ++y)
++        for (int x = 0; x < legacy.width(); ++x)
++          if (legacy.getPixel(x, y))
++            halfWidth = std::max(halfWidth, x < 64 ? 64 - x : x - 63);
++      for (int y = 0; y < dst.height(); ++y)
++        for (int x = 0; x < dst.width(); ++x)
++          dst.setPixel(x, y, legacy.getPixel(64 - halfWidth + x * halfWidth * 2 / dst.width(), y / 2));
++    } else
++#endif
++      app->render(dst, ctx);
+     drawOverlay("", EffectSettings{});
+   } else if (const AppSpec* cs = d_.engine->pushedApp(id)) {
+     drawSpec(*cs);
+@@ -124,21 +151,21 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+ const GfxFont& RenderPipeline::fontFor(const AppSpec* spec) const {
+   const uint8_t i = static_cast<uint8_t>(spec ? spec->font : FontId::Small);
+   const GfxFont* f = i < kFontCount ? d_.fonts[i] : nullptr;
+-  return *(f ? f : d_.fonts[0]);
++  return scaledFonts_[f ? i : 0].font();
+ }
+ 
+ render::ScrollLayout RenderPipeline::scrollLayoutFor(const AppSpec* spec, int canvasWidth,
+-                                                    bool iconReservesColumn) const {
++                                                    int iconColumns) const {
+   render::ScrollLayout layout;
+   layout.canvasWidth = canvasWidth;
+   layout.availWidth = canvasWidth;
+   if (!spec) return layout;
+ 
+   const Settings& s = d_.engine->state().settings();
+-  const bool hasIcon = !spec->icon.empty() && iconReservesColumn;
++  const bool hasIcon = !spec->icon.empty() && iconColumns > 0;
+   layout.text = render::textMetricsFor(*spec, fontFor(spec), s.uppercase);
+-  layout.startX = hasIcon ? kIconWidth : 0;
+-  layout.availWidth = canvasWidth - (hasIcon ? kIconWidth : 0);
++  layout.startX = hasIcon ? iconColumns : 0;
++  layout.availWidth = canvasWidth - (hasIcon ? iconColumns : 0);
+   layout.textOffset = spec->textOffsetX;
+   return layout;
+ }
+@@ -146,7 +173,7 @@ render::ScrollLayout RenderPipeline::scrollLayoutFor(const AppSpec* spec, int ca
+ void RenderPipeline::applyScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs) {
+   const bool iconReservesColumn = slot.valid && !iconIsFullScreen(&slot, width_);
+   slot.scroll.set(spec ? spec->scroll : ScrollSpec{}, d_.engine->state().settings().scrollDefaults,
+-                  scrollLayoutFor(spec, width_, iconReservesColumn), nowMs);
++                  scrollLayoutFor(spec, width_, iconReservesColumn ? iconColumns(slot) : 0), nowMs);
+ }
+ 
+ int RenderPipeline::scrollParkAfter(const AppSpec* spec, bool isNotif) const {
+@@ -192,9 +219,10 @@ void RenderPipeline::playPageSound(const AppSpec& spec) {
+ // and bottom corner.
+ void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
+   const RuntimeState& rt = d_.engine->state().runtime();
+-  const int right = out.width() - 1;
+-  const int bottom = out.height() - 1;
+-  const int mid = out.height() / 2;
++  const int scale = displayTextScale(out.height());
++  const int right = out.width() / scale - 1;
++  const int bottom = out.height() / scale - 1;
++  const int mid = out.height() / scale / 2;
+   struct Shape {
+     int count;
+     int px[3][2];
+@@ -210,7 +238,7 @@ void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
+     if (ind.blinkMs > 0 && ((nowMs / ind.blinkMs) & 1L)) continue;
+     const uint32_t rgb = pulse(ind.color, nowMs, ind.fadeMs);
+     for (int p = 0; p < shapes[i].count; ++p)
+-      out.setPixel(shapes[i].px[p][0], shapes[i].px[p][1], rgb);
++      out.fillRect(shapes[i].px[p][0] * scale, shapes[i].px[p][1] * scale, scale, scale, rgb);
+   }
+ }
+ 
+diff --git a/src/core/render/RenderPipeline.h b/src/core/render/RenderPipeline.h
+index 7950154..e169f62 100644
+--- a/src/core/render/RenderPipeline.h
++++ b/src/core/render/RenderPipeline.h
+@@ -11,6 +11,7 @@
+ #include "core/payload/AppSpec.h"
+ #include "core/render/Canvas.h"
+ #include "core/render/Font.h"
++#include "core/render/ScaledFont.h"
+ #include "core/render/ScrollController.h"
+ #include "core/sound/NotificationSound.h"
+ 
+@@ -78,7 +79,7 @@ class RenderPipeline {
+   const GfxFont& fontFor(const AppSpec* spec) const;
+ 
+   render::ScrollLayout scrollLayoutFor(const AppSpec* spec, int canvasWidth,
+-                                       bool iconReservesColumn) const;
++                                       int iconColumns) const;
+   void applyScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs);
+   void advanceScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs, int parkAfter);
+   int scrollParkAfter(const AppSpec* spec, bool isNotif) const;
+@@ -86,9 +87,11 @@ class RenderPipeline {
+   bool iconIsFullScreen(const PageSlot* slot, int canvasWidth) const;
+   const AppSpec* pageSpec(const std::string& id, bool isNotif) const;
+   int iconShift(const AppSpec& spec, const PageSlot& slot) const;
++  int iconColumns(const PageSlot& slot) const;
+ 
+   RenderPipelineDeps d_;
+   int width_, height_;
++  ScaledFont scaledFonts_[kFontCount];
+   std::unique_ptr<Canvas> transA_, transB_;
+   std::string lastRenderId_;
+   PageSlot slotA_, slotB_;
+diff --git a/src/core/render/ScaledFont.h b/src/core/render/ScaledFont.h
+new file mode 100644
+index 0000000..444faa9
+--- /dev/null
++++ b/src/core/render/ScaledFont.h
+@@ -0,0 +1,52 @@
++#pragma once
++
++#include <algorithm>
++#include <vector>
++#include "core/render/Font.h"
++
++namespace awtrix {
++
++// Own the expanded bitmaps so every text measurement, scroll bound and renderer
++// sees the same metrics, including accented glyphs in sparse Unicode ranges.
++class ScaledFont {
++ public:
++  void reset(const GfxFont& source, int scale) {
++    font_ = source;
++    bitmap_.clear();
++    glyphs_.clear();
++    int count = source.last - source.first + 1;
++    for (int r = 0; r < source.rangeCount; ++r) {
++      const auto& range = source.ranges[r];
++      for (int c = 0; c <= range.last - range.first; ++c)
++        count = std::max(count, static_cast<int>(range.index[c]));
++    }
++    for (int i = 0; i < count; ++i) {
++      const auto& g = source.glyphs[i];
++      FontGlyph out = g;
++      out.bitmapOffset = bitmap_.size();
++      out.width *= scale; out.height *= scale; out.xAdvance *= scale;
++      out.xOffset *= scale; out.yOffset *= scale;
++      const auto start = bitmap_.size();
++      bitmap_.resize(start + (out.width * out.height + 7) / 8, 0);
++      for (int y = 0; y < out.height; ++y)
++        for (int x = 0; x < out.width; ++x) {
++          const int bit = (y / scale) * g.width + x / scale;
++          if (source.bitmap[g.bitmapOffset + bit / 8] & (0x80 >> (bit % 8))) {
++            const int dest = y * out.width + x;
++            bitmap_[start + dest / 8] |= 0x80 >> (dest % 8);
++          }
++        }
++      glyphs_.push_back(out);
++    }
++    font_.yAdvance *= scale;
++    font_.bitmap = bitmap_.data();
++    font_.glyphs = glyphs_.data();
++  }
++  const GfxFont& font() const { return font_; }
++ private:
++  GfxFont font_{};
++  std::vector<uint8_t> bitmap_;
++  std::vector<FontGlyph> glyphs_;
++};
++
++}
+diff --git a/src/core/render/StatusPixels.cpp b/src/core/render/StatusPixels.cpp
+index e62afda..3387a5a 100644
+--- a/src/core/render/StatusPixels.cpp
++++ b/src/core/render/StatusPixels.cpp
+@@ -1,3 +1,4 @@
++#include "core/render/DisplayScale.h"
+ #include "core/render/StatusPixels.h"
+ 
+ #include <cmath>
+@@ -31,11 +32,12 @@ uint32_t pulse(uint32_t rgb, int64_t nowMs, uint32_t periodMs) {
+ 
+ void drawLinkStatus(Canvas& out, const net::LinkStatus& wifi, const net::LinkStatus& mqtt,
+                     int64_t nowMs) {
+-  if (isDown(wifi)) out.setPixel(0, 0, pulse(kWifiColor, nowMs, kPulseMs));
++  const int scale = displayTextScale(out.height());
++  if (isDown(wifi)) out.fillRect(0, 0, scale, scale, pulse(kWifiColor, nowMs, kPulseMs));
+   // MQTT sitting offline because the Wi-Fi is down is not a second fault - it is the same outage,
+   // and the Wi-Fi pixel already reports it. One dot lit always means one thing to go and fix.
+   if (isDown(mqtt) && mqtt.error != net::LinkError::NoWifi)
+-    out.setPixel(0, out.height() - 1, pulse(kMqttColor, nowMs, kPulseMs));
++    out.fillRect(0, out.height() - scale, scale, scale, pulse(kMqttColor, nowMs, kPulseMs));
+ }
+ 
+ }
+diff --git a/src/core/script/ScriptApp.h b/src/core/script/ScriptApp.h
+index 10ea431..6f762a5 100644
+--- a/src/core/script/ScriptApp.h
++++ b/src/core/script/ScriptApp.h
+@@ -33,6 +33,7 @@ class ScriptApp : public IApp {
+ 
+   const std::string& id() const override { return name_; }
+   void render(Canvas& canvas, const RenderCtx& ctx) override;
++  bool usesNativeCanvas() const override { return true; }
+ 
+   void tickLoop(const RenderCtx& ctx);
+   void holdLoopUntil(int64_t ms) { loopNotBeforeMs_ = ms; }
+diff --git a/src/hal/IBoard.h b/src/hal/IBoard.h
+index 69857dd..d2fab05 100644
+--- a/src/hal/IBoard.h
++++ b/src/hal/IBoard.h
+@@ -37,6 +37,8 @@ class IBoard {
+   // Raw ADC counts, not lux; the light curve is applied further up in AutoBrightness.
+   virtual int readLdrRaw() = 0;
+   virtual void pollButtons(ButtonState& out) = 0;
++  // Consume rotary detents separately from held button states.
++  virtual int takeRotation() { return 0; }
+ 
+   // Null means "not wired on this board". Both can be live at once: LEDC and a UART share nothing,
+   // and adding a DFPlayer must not cost the buzzer.
+diff --git a/src/media/DevicePageIcon.h b/src/media/DevicePageIcon.h
+index 35cc065..6745404 100644
+--- a/src/media/DevicePageIcon.h
++++ b/src/media/DevicePageIcon.h
+@@ -1,47 +1,57 @@
+ #pragma once
+ 
+-#include <cstdint>
+-
++#include <algorithm>
+ #include "core/render/Canvas.h"
+ #include "core/render/RenderPipeline.h"
+ #include "media/GifPlayer.h"
+ #include "media/IconRenderer.h"
++#include "media/MicroGif.h"
+ 
+ namespace awtrix {
+ 
+ class DevicePageIcon : public IPageIcon {
+  public:
+-  // Icon ids carry no extension, so try GIF first and fall back to JPG. A GIF may be wider than
+-  // 8 px and sets the page's icon width accordingly; a JPG is always 8x8.
+   bool begin(const std::string& iconId) override {
+-    buf_.clear(0x000000u);
+-    width_ = 0;
+-    if (gif_.open(iconId, false, 1) ==
+-        GifPlayer::OpenResult::kGood) {
+-      width_ = gif_.width();
+-      return true;
++    clear();
++    buf_.clear();
++    if (gif_.open(iconId, false, 1) == GifPlayer::OpenResult::kGood) {
++      sourceWidth_ = gif_.width();
++      sourceHeight_ = gif_.height();
++    } else if (!icon::draw(buf_, iconId, 0, 0, &sourceWidth_, &sourceHeight_)) {
++      return false;
++    }
++    width_ = sourceWidth_;
++    height_ = sourceHeight_;
++#ifdef AWTRIX_TC002
++    // Classic tiles grow to 16x16; classic full-screen art fits the 52x16 panel.
++    // Native assets keep every source pixel, including full-screen 52x16 GIFs.
++    if (sourceHeight_ <= 8) {
++      width_ = std::min(52, sourceWidth_ * 2);
++      height_ = sourceHeight_ * 2;
+     }
+-    if (!icon::draw(buf_, iconId, 0, 0)) return false;
+-    width_ = 8;
+-    return true;
++#endif
++    return width_ > 0 && height_ > 0;
+   }
+   void clear() override {
+     gif_.close();
+-    width_ = 0;
++    width_ = height_ = sourceWidth_ = sourceHeight_ = 0;
+   }
+   void advance(int64_t nowMs) override {
+     if (gif_.active()) gif_.render(buf_, nowMs);
+   }
+   void blit(Canvas& dst, int xOffset) const override {
+-    for (int y = 0; y < 8; ++y)
+-      for (int x = 0; x < width_; ++x) dst.setPixel(x + xOffset, y, buf_.getPixel(x, y));
++    const int top = (dst.height() - height_) / 2;
++    for (int y = 0; y < height_; ++y)
++      for (int x = 0; x < width_; ++x)
++        dst.setPixel(x + xOffset, y + top,
++          buf_.getPixel(x * sourceWidth_ / width_, y * sourceHeight_ / height_));
+   }
+   int width() const override { return width_; }
+ 
+  private:
+-  Canvas buf_{32, 8};
++  Canvas buf_{media::MicroGif::kMaxW, media::MicroGif::kMaxH};
+   GifPlayer gif_;
+-  int width_ = 0;
++  int width_ = 0, height_ = 0, sourceWidth_ = 0, sourceHeight_ = 0;
+ };
+ 
+ }
+diff --git a/src/media/IconRenderer.cpp b/src/media/IconRenderer.cpp
+index 6ae376f..a414fb6 100644
+--- a/src/media/IconRenderer.cpp
++++ b/src/media/IconRenderer.cpp
+@@ -26,7 +26,7 @@ bool jpgOutput(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
+ }
+ }
+ 
+-bool draw(Canvas& canvas, const std::string& iconId, int x, int y) {
++bool draw(Canvas& canvas, const std::string& iconId, int x, int y, int* width, int* height) {
+   media::PodBuffer<uint8_t> buf;
+   // Same convention as GifPlayer: anything longer than a plausible filename is inline base64.
+   if (iconId.size() > 64) {
+@@ -50,6 +50,10 @@ bool draw(Canvas& canvas, const std::string& iconId, int x, int y) {
+     }
+   }
+ 
++  uint16_t w = 0, h = 0;
++  if (TJpgDec.getJpgSize(&w, &h, buf.data(), buf.size()) != JDR_OK) return false;
++  if (width) *width = w;
++  if (height) *height = h;
+   s_canvas = &canvas;
+   TJpgDec.setJpgScale(1);
+   TJpgDec.setCallback(jpgOutput);
+diff --git a/src/media/IconRenderer.h b/src/media/IconRenderer.h
+index 9e71783..9f7308f 100644
+--- a/src/media/IconRenderer.h
++++ b/src/media/IconRenderer.h
+@@ -7,7 +7,7 @@
+ namespace awtrix {
+ namespace icon {
+ 
+-bool draw(Canvas& canvas, const std::string& iconId, int x, int y);
++bool draw(Canvas& canvas, const std::string& iconId, int x, int y, int* width = nullptr, int* height = nullptr);
+ 
+ }
+ }
+diff --git a/src/media/MicroGif.cpp b/src/media/MicroGif.cpp
+index e565fbc..b7da4f3 100644
+--- a/src/media/MicroGif.cpp
++++ b/src/media/MicroGif.cpp
+@@ -10,7 +10,7 @@ namespace media {
+ 
+ namespace {
+ 
+-constexpr int kLzwSlots = 1024;
++constexpr int kLzwSlots = 4096;
+ static_assert(MicroGif::kMaxW * MicroGif::kMaxH + 258 + 2 <= kLzwSlots,
+               "LZW scratch is sized for the panel; grow kLzwSlots with it");
+ 
+diff --git a/src/media/MicroGif.h b/src/media/MicroGif.h
+index f76bf15..ce1e03f 100644
+--- a/src/media/MicroGif.h
++++ b/src/media/MicroGif.h
+@@ -12,8 +12,13 @@ namespace media {
+ // time, and everything larger than kMaxW x kMaxH is clipped or rejected.
+ class MicroGif {
+  public:
++#ifdef AWTRIX_TC002
++  static constexpr int kMaxW = 52;
++  static constexpr int kMaxH = 16;
++#else
+   static constexpr int kMaxW = 32;
+   static constexpr int kMaxH = 8;
++#endif
+ 
+   bool begin(const uint8_t* data, std::size_t len);
+ 
+diff --git a/src/media/ScriptIcon.cpp b/src/media/ScriptIcon.cpp
+index e64c6a8..6042aba 100644
+--- a/src/media/ScriptIcon.cpp
++++ b/src/media/ScriptIcon.cpp
+@@ -55,6 +55,8 @@ void ScriptIcon::load(Entry& e, int64_t nowMs) {
+ 
+   if (r == GifPlayer::OpenResult::kGood) {
+     e.anim = gif;
++    e.width = gif->width();
++    e.height = gif->height();
+     gif->render(e.buf, nowMs);
+     e.state = State::kGood;
+     e.retryStep = 0;
+@@ -72,7 +74,7 @@ void ScriptIcon::load(Entry& e, int64_t nowMs) {
+   }
+ 
+   // No GIF under that name, so fall back to the JPG icon of the same id.
+-  e.state = icon::draw(e.buf, e.name, 0, 0) ? State::kGood : State::kMissing;
++  e.state = icon::draw(e.buf, e.name, 0, 0, &e.width, &e.height) ? State::kGood : State::kMissing;
+   e.retryStep = 0;
+ }
+ 
+@@ -110,8 +112,8 @@ bool ScriptIcon::draw(Canvas& canvas, const std::string& name, int x, int y, int
+ 
+   if (e->anim) e->anim->render(e->buf, nowMs);
+ 
+-  for (int row = 0; row < 8; ++row)
+-    for (int col = 0; col < 8; ++col)
++  for (int row = 0; row < e->height; ++row)
++    for (int col = 0; col < e->width; ++col)
+       canvas.setPixel(x + col, y + row, e->buf.getPixel(col, row));
+   return true;
+ }
+diff --git a/src/media/ScriptIcon.h b/src/media/ScriptIcon.h
+index a993120..25e5c7b 100644
+--- a/src/media/ScriptIcon.h
++++ b/src/media/ScriptIcon.h
+@@ -6,13 +6,14 @@
+ #include <string>
+ 
+ #include "core/render/Canvas.h"
++#include "media/MicroGif.h"
+ #include "core/script/ScriptServices.h"
+ 
+ namespace awtrix {
+ 
+ class GifPlayer;
+ 
+-// Small LRU cache of decoded 8x8 icons for scripts. Scripts redraw every tick, so re-opening the
++// Small LRU cache of decoded icons up to the panel size for scripts. Scripts redraw every tick, so re-opening the
+ // file each time would hammer the filesystem; the cache is deliberately tiny to bound RAM.
+ class ScriptIcon : public script::IScriptIcon {
+  public:
+@@ -37,7 +38,8 @@ class ScriptIcon : public script::IScriptIcon {
+ 
+   struct Entry {
+     std::string name;
+-    Canvas buf{8, 8};
++    Canvas buf{media::MicroGif::kMaxW, media::MicroGif::kMaxH};
++    int width = 0, height = 0;
+     GifPlayer* anim = nullptr;
+     bool occupied = false;
+     State state = State::kMissing;
+diff --git a/src/persistence/DeviceConfig.h b/src/persistence/DeviceConfig.h
+index 21b751c..50c1db9 100644
+--- a/src/persistence/DeviceConfig.h
++++ b/src/persistence/DeviceConfig.h
+@@ -43,7 +43,11 @@ struct DeviceConfig {
+   float ldrFactor = 1.0f, ldrGamma = 2.2f;
+   bool ldrOnGround = false;
+   long brightnessSmoothing = 10000;
++#ifdef AWTRIX_TC002
++  int panelWidth = 52;
++#else
+   int panelWidth = 32;
++#endif
+   int panels = 1;
+   PanelStart panelStart = PanelStart::TopLeft;
+   Wiring panelWiring = Wiring::Rows;
+diff --git a/src/persistence/SystemConfigApply.cpp b/src/persistence/SystemConfigApply.cpp
+index 0699ab1..4a9c687 100644
+--- a/src/persistence/SystemConfigApply.cpp
++++ b/src/persistence/SystemConfigApply.cpp
+@@ -20,6 +20,20 @@ bool apply(DeviceConfig& cfg, api::JsonReader obj, int& applied, ApplyError& err
+   DeviceConfig merged = cfg;
+   const std::string ssid = merged.wifiSsid, pass = merged.wifiPass;
+   applied = merged.applyRead(obj);
++#ifdef AWTRIX_TC002
++  if(merged.panelWidth!=52 || merged.panels!=1) {
++    err={422,"validationFailed","TC002 has a fixed 52 by 16 pixel matrix","panelWidth"};
++    return false;
++  }
++#define FIXED(key) if(merged.key!=cfg.key) { \
++  err={422,"validationFailed","TC002 hardware wiring is fixed",#key}; return false; }
++  FIXED(panelStart) FIXED(panelWiring) FIXED(panelSerpentine)
++  FIXED(panelChainReverse) FIXED(panelChainSerpentine) FIXED(dfplayer)
++  FIXED(pinMatrix) FIXED(pinBtnLeft) FIXED(pinBtnSelect) FIXED(pinBtnRight)
++  FIXED(pinBattery) FIXED(pinLdr) FIXED(pinBuzzer) FIXED(pinI2cSda) FIXED(pinI2cScl)
++  FIXED(pinDfRx) FIXED(pinDfTx) FIXED(pinI2sBclk) FIXED(pinI2sLrclk) FIXED(pinI2sDout)
++#undef FIXED
++#endif
+   // A restored backup keeps the credentials this device is connected with — the backup may come
+   // from another network, and taking its Wi-Fi settings would strand the device.
+   if (origin == Origin::Restore) {
+diff --git a/src/sim/SimBoard.h b/src/sim/SimBoard.h
+index bcc37f1..8848c9f 100644
+--- a/src/sim/SimBoard.h
++++ b/src/sim/SimBoard.h
+@@ -13,6 +13,10 @@
+ #include "hal/IBoard.h"
+ #include "sim/SimStore.h"
+ #include "system/Log.h"
++#ifdef AWTRIX_TC002
++#include "Tc002Hardware.h"
++#include "Tc002Audio.h"
++#endif
+ 
+ namespace awtrix {
+ 
+@@ -45,11 +49,17 @@ class SimToneSink : public sound::IToneSink {
+ class SimSensors : public ISensorBus {
+  public:
+   void begin() override {}
+-  bool hasSensor() const override { return true; }
++  bool hasSensor() const override {
++#ifdef AWTRIX_TC002
++    return false;
++#else
++    return true;
++#endif
++  }
+   SensorReading read() override {
+     SensorReading r;
+-    r.present = true;
+-    r.hasHumidity = true;
++    r.present = hasSensor();
++    r.hasHumidity = hasSensor();
+     r.temperatureC = temperatureC;
+     r.humidity = humidity;
+     return r;
+@@ -62,11 +72,22 @@ class SimSensors : public ISensorBus {
+ 
+ class SimBoard : public IBoard {
+  public:
+-  const char* name() const override { return "Simulator"; }
++  const char* name() const override {
++#ifdef AWTRIX_TC002
++    return "Ulanzi TC002";
++#else
++    return "Simulator";
++#endif
++  }
+   int matrixWidth() const override { return layout_.width(); }
+   int matrixHeight() const override { return layout_.height(); }
+ 
+-  void begin() override {}
++  void begin() override {
++#ifdef AWTRIX_TC002
++    hardware_.begin();
++    audio_.begin();
++#endif
++  }
+   // On the device the colour grade is applied inside the LED driver, so grade here too before the
+   // frame is handed on; graded_ is a scratch canvas kept only while a non-identity grade is set.
+   void show(const Canvas& canvas) override {
+@@ -85,7 +106,13 @@ class SimBoard : public IBoard {
+     brightness_ = brightness;
+     applyGrade();
+   }
+-  void setMatrixLayout(const MatrixLayout& layout) override { layout_ = layout; }
++  void setMatrixLayout(const MatrixLayout& layout) override {
++    layout_ = layout;
++#ifdef AWTRIX_TC002
++    layout_.panelWidth = 52;
++    layout_.panels = 1;
++#endif
++  }
+   void applyColorGrade(const render::GradeParams& grade) override {
+     baseGrade_ = grade;
+     applyGrade();
+@@ -99,9 +126,27 @@ class SimBoard : public IBoard {
+     grade_.setParams(p);
+   }
+ 
+-  bool hasBattery() const override { return true; }
+-  bool hasLightSensor() const override { return true; }
+-  int readBatteryMillivolts() override { return batteryPinMillivolts; }
++  bool hasBattery() const override {
++#ifdef AWTRIX_TC002
++    return tc002::hardwareEnabled();
++#else
++    return true;
++#endif
++  }
++  bool hasLightSensor() const override {
++#ifdef AWTRIX_TC002
++    return false;
++#else
++    return true;
++#endif
++  }
++  int readBatteryMillivolts() override {
++#ifdef AWTRIX_TC002
++    return hardware_.batteryMillivolts();
++#else
++    return batteryPinMillivolts;
++#endif
++  }
+   int readLdrRaw() override { return ldrRaw; }
+   // Presses are "held until a deadline" that the /sim/button route sets, which is why they have to
+   // outlast the 35 ms debounce to register at all.
+@@ -110,9 +155,29 @@ class SimBoard : public IBoard {
+     out.left = now < leftUntilMs;
+     out.select = now < selectUntilMs;
+     out.right = now < rightUntilMs;
++#ifdef AWTRIX_TC002
++    if (tc002::hardwareEnabled()) {
++      int rotation=0;
++      hardware_.poll(out.left, out.select, out.right, rotation);
++      pendingRotation += rotation;
++    }
++#endif
+   }
+ 
+-  sound::IToneSink* toneSink() override { return &tone_; }
++  int takeRotation() override {
++    const int value = pendingRotation;
++    pendingRotation = 0;
++    return value;
++  }
++  int pendingRotation = 0;
++
++  sound::IToneSink* toneSink() override {
++#ifdef AWTRIX_TC002
++    return audio_.available() ? &audio_ : nullptr;
++#else
++    return &tone_;
++#endif
++  }
+   // No DFPlayer is simulated: a fake that always says yes would teach the resolution order a lie.
+   sound::ITrackSink* trackSink() override { return nullptr; }
+   ISensorBus& sensors() override { return sensors_; }
+@@ -121,6 +186,12 @@ class SimBoard : public IBoard {
+   int64_t now() const { return nowMs_; }
+   SimSensors& simSensors() { return sensors_; }
+   uint8_t brightness() const { return brightness_; }
++#ifdef AWTRIX_TC002
++  tc002::Audio& audio() { return audio_; }
++  void showHardware(const Canvas& canvas) {
++    hardware_.show(canvas.data(), layout_.mirror, layout_.rotate180);
++  }
++#endif
+ 
+   // Where finished frames go: the terminal renderer or a test hooks this. Unset means nothing is
+   // drawn anywhere, which is the normal headless case.
+@@ -134,6 +205,10 @@ class SimBoard : public IBoard {
+   int batteryPinMillivolts = 2290;
+ 
+  private:
++#ifdef AWTRIX_TC002
++  tc002::Hardware hardware_;
++  tc002::Audio audio_;
++#endif
+   MatrixLayout layout_;
+   render::GradeParams baseGrade_;
+   render::ColorGrade grade_;
+diff --git a/src/sim/SimHttpServer.cpp b/src/sim/SimHttpServer.cpp
+index 71aad9c..6ca5e73 100644
+--- a/src/sim/SimHttpServer.cpp
++++ b/src/sim/SimHttpServer.cpp
+@@ -13,6 +13,7 @@
+ #include "AppConfig.h"
+ #include "core/AssetPaths.h"
+ #include "core/ConfigRules.h"
++#include "core/ProvisioningPolicy.h"
+ #include "core/CoreEngine.h"
+ #include "core/SocProfile.h"
+ #include "core/api/ApiRouter.h"
+@@ -34,6 +35,14 @@
+ #include "system/Log.h"
+ #include "system/MonotonicClock.h"
+ #include "vendor/httplib.h"
++#ifdef AWTRIX_TC002
++#include "Tc002System.h"
++#include "FirmwareImage.h"
++#include <fcntl.h>
++#include <unistd.h>
++#include <spawn.h>
++#include <sys/stat.h>
++#endif
+ 
+ namespace awtrix {
+ 
+@@ -113,6 +122,15 @@ std::string simDeviceStateJson(CoreEngine& engine, const std::string& uid,
+   facts.hasHumidity = true;
+   facts.hasPressure = false;
+   facts.scriptingRunning = scriptingRunning;
++#ifdef AWTRIX_TC002
++  facts.boardType="tc002"; facts.soc="ssd202d";
++  facts.ipAddress=tc002::wifiApMode() ? "0.0.0.0" : tc002::ipAddress();
++  facts.freeHeapBytes=tc002::availableMemory();
++  facts.minFreeHeapBytes=0;
++  facts.hasBattery=tc002::batteryAvailable(); facts.hasLightSensor=false;
++  facts.wifiRssi=tc002::wifiRssi();
++  facts.hasTemperature=false; facts.hasHumidity=false;
++#endif
+   return buildDeviceJson(engine, uid, facts);
+ }
+ 
+@@ -205,13 +223,18 @@ struct SimHttpServer::Impl {
+     cv.wait(lk, [&] { return done || stopping; });
+   }
+ 
++#ifdef AWTRIX_TC002
++  void handleFirmware(const httplib::Request&,httplib::Response&,const httplib::ContentReader&);
++#endif
+   void route(const httplib::Request& req, httplib::Response& res);
+   bool serveCommand(const httplib::Request& req, const std::string& method, httplib::Response& res);
+   bool serveState(const httplib::Request& req, const std::string& method, httplib::Response& res);
+   bool serveSystem(const httplib::Request& req, const std::string& method, httplib::Response& res);
+   std::string systemJson(bool withSecrets = false) const;
+-  void handleFiles(const httplib::Request& req, const std::string& method, httplib::Response& res);
++  void handleFiles(const httplib::Request& req, const std::string& method, httplib::Response& res,
++                   const std::string& dirOverride = "", const std::string& pathOverride = "");
+   void handleSounds(const httplib::Request& req, const std::string& method, httplib::Response& res);
++  void handleMp3(const httplib::Request& req, const std::string& method, httplib::Response& res);
+   void handleRestore(const httplib::Request& req, const std::string& method, httplib::Response& res);
+   void handleSim(const httplib::Request& req, const std::string& method, httplib::Response& res);
+ };
+@@ -323,10 +346,49 @@ void SimHttpServer::Impl::handleSounds(const httplib::Request& req, const std::s
+   sendError(res, 405, "methodNotAllowed", "allowed method(s): PUT, DELETE");
+ }
+ 
++void SimHttpServer::Impl::handleMp3(const httplib::Request& req, const std::string& method,
++                                    httplib::Response& res) {
++  if (req.path == "/api/v1/audio/mp3") {
++    if (method != "GET" && method != "POST") {
++      sendError(res, 405, "methodNotAllowed", "allowed method(s): GET, POST");
++      return;
++    }
++    if (method == "POST") {
++      if (req.files.empty()) {
++        sendError(res, 400, "invalidFile", "a multipart MP3 file is required");
++        return;
++      }
++      for (const auto& kv : req.files) {
++        const auto& name = kv.second.filename;
++        if (name.find('/') != std::string::npos ||
++            !assets::uploadNameOk("/MP3/" + name)) {
++          sendError(res, 400, "invalidName", "expected an MP3 filename with 1-32 characters of A-Z, a-z, 0-9, _ or -");
++          return;
++        }
++      }
++    }
++    handleFiles(req, method, res, "/MP3");
++  } else {
++    const auto name = req.path.substr(sizeof("/api/v1/audio/mp3/") - 1);
++    const auto path = sound::mp3PathFor(name);
++    if (path.empty()) {
++      sendError(res, 400, "invalidName", "an MP3 is named with 1-32 characters of A-Z, a-z, 0-9, _ or -");
++      return;
++    }
++    if (method != "DELETE") {
++      sendError(res, 405, "methodNotAllowed", "allowed method(s): DELETE");
++      return;
++    }
++    handleFiles(req, method, res, "", path);
++  }
++}
++
+ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::string& method,
+-                                      httplib::Response& res) {
++                                      httplib::Response& res, const std::string& dirOverride,
++                                      const std::string& pathOverride) {
+   if (method == "GET") {
+-    std::string dir = req.has_param("dir") ? req.get_param_value("dir") : "/ICONS";
++    std::string dir = !dirOverride.empty() ? dirOverride :
++        (req.has_param("dir") ? req.get_param_value("dir") : "/ICONS");
+     if (dir.empty() || dir[0] != '/') dir = "/" + dir;
+     if (dir.find("..") != std::string::npos) {
+       sendError(res, 400, "invalidPath", "path traversal rejected");
+@@ -356,7 +418,8 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
+     return;
+   }
+   if (method == "POST") {
+-    std::string dir = req.has_param("dir") ? req.get_param_value("dir") : "/ICONS";
++    std::string dir = !dirOverride.empty() ? dirOverride :
++        (req.has_param("dir") ? req.get_param_value("dir") : "/ICONS");
+     if (dir.empty() || dir[0] != '/') dir = "/" + dir;
+     if (dir.find("..") != std::string::npos) {
+       sendError(res, 400, "invalidPath", "path traversal rejected");
+@@ -383,7 +446,10 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
+       }
+       std::error_code ec;
+       stdfs::create_directories(stdfs::u8path(sim::hostPath(target)).parent_path(), ec);
+-      sim::writeFile(sim::hostPath(target), f.content);
++      if (!sim::writeFile(sim::hostPath(target), f.content)) {
++        sendError(res, 507, "insufficientStorage", "could not write the file");
++        return;
++      }
+       logf("sim files: uploaded %s (%u B)", target.c_str(),
+            static_cast<unsigned>(f.content.size()));
+     }
+@@ -392,7 +458,8 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
+     return;
+   }
+   if (method == "DELETE") {
+-    const std::string fn = req.has_param("path") ? req.get_param_value("path") : "";
++    const std::string fn = !pathOverride.empty() ? pathOverride :
++        (req.has_param("path") ? req.get_param_value("path") : "");
+     if (!assets::isWritable(fn)) {
+       sendError(res, 400, "invalidPath",
+                 "path must be under /ICONS, /MELODIES, /PALETTES or /MP3 and contain no '..'");
+@@ -416,6 +483,11 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
+ void SimHttpServer::Impl::handleSim(const httplib::Request& req, const std::string& method,
+                                     httplib::Response& res) {
+   const std::string& path = req.path;
++  if (method == "POST" && (path == "/sim/rotary/left" || path == "/sim/rotary/right")) {
++    board->pendingRotation += path == "/sim/rotary/right" ? 1 : -1;
++    sendJson(res, 200, "{\"ok\":true}");
++    return;
++  }
+   if (method == "POST" && path.rfind("/sim/button/", 0) == 0) {
+     const std::string btn = path.substr(12);
+     if (btn != "left" && btn != "select" && btn != "right") {
+@@ -480,7 +552,80 @@ void SimHttpServer::Impl::handleSim(const httplib::Request& req, const std::stri
+   sendError(res, 404, "notFound", "unknown /sim route");
+ }
+ 
++
++#ifdef AWTRIX_TC002
++void SimHttpServer::Impl::handleFirmware(const httplib::Request& req,httplib::Response& res,
++                                        const httplib::ContentReader& reader) {
++  bool allowed=false;
++  runOnLoop([&] {
++    if(!tc002::hardwareEnabled()) { sendError(res,503,"unavailable","updates require TC002 hardware"); return; }
++    if(tc002::wifiApMode()) { sendError(res,403,"forbidden","updates are disabled during provisioning"); return; }
++    if(cfg->authEnabled) {
++      auto expected=httplib::make_basic_authentication_header(cfg->authUser,cfg->authPass);
++      if(req.get_header_value(expected.first)!=expected.second) {
++        res.set_header("WWW-Authenticate","Basic realm=\"AWTRIX NG TC002\"");
++        sendError(res,401,"unauthorized","authentication required"); return;
++      }
++    }
++    allowed=true;
++  });
++  if(!allowed) return;
++  static std::mutex uploadMutex;
++  std::unique_lock<std::mutex> upload(uploadMutex,std::try_to_lock);
++  if(!upload.owns_lock()) { sendError(res,409,"updateBusy","another upload is in progress"); return; }
++  if(!req.is_multipart_form_data()) { sendError(res,400,"invalidImage","multipart firmware file is required"); return; }
++  char path[]="/tmp/awtrix-update-XXXXXX";
++  int fd=mkstemp(path);
++  if(fd<0) { sendError(res,507,"insufficientStorage","cannot stage update"); return; }
++  fcntl(fd,F_SETFD,FD_CLOEXEC);
++  bool fileSeen=false; size_t bytes=0;
++  bool received=reader([&](const httplib::MultipartFormData& file) {
++    if(fileSeen || file.name!="firmware") return false;
++    fileSeen=true; return true;
++  },[&](const char* data,size_t count) {
++    if(!fileSeen || bytes+count>0x800000+572) return false;
++    size_t pos=0;
++    while(pos<count) {
++      ssize_t n=write(fd,data+pos,count-pos); if(n<=0) return false;
++      pos+=n;
++    }
++    bytes+=count; return true;
++  });
++  tc002::FirmwareImage image; std::string error;
++  bool valid=received && fileSeen && tc002::validateFirmware(fd,image,error);
++  close(fd);
++  if(!valid) { unlink(path); sendError(res,422,"invalidImage",error.empty()?"incomplete or invalid upload":error.c_str()); return; }
++    const char* helper="/tmp/awtrix-update-helper";
++    std::error_code ec;
++    stdfs::copy_file("/res/bin/tc002-update",helper,stdfs::copy_options::overwrite_existing,ec);
++    if(ec || chmod(helper,0700)!=0) {
++      unlink(path); sendError(res,503,"unavailable","installed update helper is missing"); return;
++    }
++    char argument[]="--install";
++    char* args[]={const_cast<char*>(helper),argument,path,nullptr};
++    posix_spawn_file_actions_t actions; posix_spawn_file_actions_init(&actions);
++    posix_spawn_file_actions_addopen(&actions,1,"/tmp/awtrix-update.log",O_WRONLY|O_CREAT|O_TRUNC,0600);
++    posix_spawn_file_actions_adddup2(&actions,1,2);
++    pid_t child;
++    int status=posix_spawn(&child,helper,&actions,nullptr,args,::environ);
++    posix_spawn_file_actions_destroy(&actions);
++    if(status) { unlink(path); sendError(res,500,"updateFailed","cannot start update helper"); return; }
++    sendJson(res,202,"{\"ok\":true}");
++
++}
++#endif
++
+ void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response& res) {
++#ifdef AWTRIX_TC002
++  if(cfg->authEnabled) {
++    const auto expected=httplib::make_basic_authentication_header(cfg->authUser,cfg->authPass);
++    if(req.get_header_value(expected.first)!=expected.second) {
++      res.set_header("WWW-Authenticate","Basic realm=\"AWTRIX NG TC002\"");
++      sendError(res,401,"unauthorized","authentication required");
++      return;
++    }
++  }
++#endif
+   const std::string& path = req.path;
+   const api::MethodResolution resolved = api::resolveHttpMethod(
+       req.method, path,
+@@ -493,6 +638,11 @@ void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response&
+   }
+   const std::string& method = resolved.method;
+   const bool get = (method == "GET");
++#ifdef AWTRIX_TC002
++  if(tc002::wifiApMode() && !provisioning::apModeAllows(method,path)) {
++    sendError(res,403,"forbidden","not available during provisioning"); return;
++  }
++#endif
+ 
+   // Mirrors the device's Content-Type gate so a client that works against the sim works there too.
+   // Raw-body writes (script sources, melodies) are exempt because they are not JSON.
+@@ -518,6 +668,9 @@ void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response&
+   }
+ 
+   if (path == "/sim" || path.rfind("/sim/", 0) == 0) {
++#ifdef AWTRIX_TC002
++    if(tc002::hardwareEnabled()) { sendError(res,404,"notFound","not found"); return; }
++#endif
+     handleSim(req, method, res);
+     return;
+   }
+@@ -548,6 +701,11 @@ void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response&
+     return;
+   }
+ 
++  if (path == "/api/v1/audio/mp3" || path.rfind("/api/v1/audio/mp3/", 0) == 0) {
++    handleMp3(req, method, res);
++    return;
++  }
++
+   if (path == "/api/v1/files") {
+     handleFiles(req, method, res);
+     return;
+@@ -559,8 +717,7 @@ void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response&
+   }
+ 
+   if (path == "/update") {
+-    sendError(res, 501, "notSupported", "firmware OTA does not apply to the simulator");
+-    return;
++    sendError(res,405,"methodNotAllowed","use multipart POST"); return;
+   }
+ 
+   sendError(res, 404, "notFound", "unknown route");
+@@ -645,6 +802,13 @@ bool SimHttpServer::Impl::serveState(const httplib::Request& req, const std::str
+     return true;
+   }
+   if (path == "/api/v1/system/wifi-scan") {
++#ifdef AWTRIX_TC002
++    if(tc002::hardwareEnabled()) {
++      const auto scan=tc002::wifiScan();
++      sendJson(res,scan.empty() ? 202 : 200,scan.empty() ? "[]" : scan);
++      return true;
++    }
++#endif
+     sendJson(res, 200, "[]");
+     return true;
+   }
+@@ -757,11 +921,17 @@ bool SimHttpServer::begin(uint16_t port, CoreEngine& engine, SimBoard& board, Ca
+   im->port = port;
+ 
+   im->svr.set_default_headers({{"Access-Control-Allow-Origin", "*"}});
++  im->svr.set_payload_max_length(8u*1024u*1024u+65536u);
+ 
+   const auto marshal = [im](const httplib::Request& req, httplib::Response& res) {
+     im->runOnLoop([&] { im->route(req, res); });
+   };
+   im->svr.Get(".*", marshal);
++#ifdef AWTRIX_TC002
++  im->svr.Post("/update",[im](const httplib::Request& req,httplib::Response& res,const httplib::ContentReader& reader) {
++    im->handleFirmware(req,res,reader);
++  });
++#endif
+   im->svr.Post(".*", marshal);
+   im->svr.Put(".*", marshal);
+   im->svr.Patch(".*", marshal);
+diff --git a/src/sim/SimIconRenderer.cpp b/src/sim/SimIconRenderer.cpp
+index 7e36d32..7b0105f 100644
+--- a/src/sim/SimIconRenderer.cpp
++++ b/src/sim/SimIconRenderer.cpp
+@@ -47,7 +47,7 @@ int jpgOut(JDEC* jd, void* bitmap, JRECT* rect) {
+ 
+ // Host half of icon::draw. The device goes through the Arduino TJpg_Decoder wrapper; here tjpgd is
+ // driven directly, and the two must agree on pixel placement or the sim lies about what you'd see.
+-bool draw(Canvas& canvas, const std::string& iconId, int x, int y) {
++bool draw(Canvas& canvas, const std::string& iconId, int x, int y, int* width, int* height) {
+   media::PodBuffer<uint8_t> buf;
+   // Longer than any legal icon name, so treat it as an inline base64 JPEG rather than a lookup.
+   if (iconId.size() > 64) {
+@@ -80,6 +80,9 @@ bool draw(Canvas& canvas, const std::string& iconId, int x, int y) {
+   JDEC jd;
+   uint8_t work[TJPGD_WORKSPACE_SIZE] __attribute__((aligned(4)));
+   if (jd_prepare(&jd, jpgIn, work, sizeof(work), &ctx) != JDR_OK) return false;
++  if (jd.width > canvas.width() || jd.height > canvas.height()) return false;
++  if (width) *width = jd.width;
++  if (height) *height = jd.height;
+   jd.swap = 0;
+   return jd_decomp(&jd, jpgOut, 0) == JDR_OK;
+ }
+diff --git a/src/sim/SimPeriphery.cpp b/src/sim/SimPeriphery.cpp
+index 01f39dc..646ce4d 100644
+--- a/src/sim/SimPeriphery.cpp
++++ b/src/sim/SimPeriphery.cpp
+@@ -1,7 +1,13 @@
+ #include "sim/SimPeriphery.h"
++#ifdef AWTRIX_TC002
++#include "Tc002Hardware.h"
++#include "core/apps/builtin/Tc002Layout.h"
++#include "media/AwtrixFontAdapter.h"
++#endif
+ 
+ #include "core/Command.h"
+ #include "core/CoreEngine.h"
++#include <algorithm>
+ 
+ namespace awtrix {
+ 
+@@ -26,6 +32,34 @@ void SimPeriphery::begin(CoreEngine& engine, IBoard& board, const DeviceConfig&
+   cfg_ = &cfg;
+ }
+ 
++#ifdef AWTRIX_TC002
++void SimPeriphery::adjustControl(bool brightness, int direction, int64_t nowMs) {
++  const auto& s = engine_->state().settings();
++  Command command(CommandType::SetSettings);
++  if (brightness) {
++    // Keep the display visible at the lower end; power-off remains a separate action.
++    const int value = std::clamp(s.brightness + direction * 10, 1, 255);
++    command.payload = "{\"brightness\":" + std::to_string(value) + ",\"autoBrightness\":false}";
++  } else {
++    const auto volume = [direction](int value) { return std::to_string(std::clamp(value + direction * 5, 0, 100)); };
++    // One physical speaker serves tones, files and radio. Adjust each existing
++    // volume by the same step, preserving independently configured levels.
++    command.payload = "{\"buzzerVolume\":" + volume(s.buzzerVolume) +
++      ",\"mp3Volume\":" + volume(s.mp3Volume) + ",\"radioVolume\":" + volume(s.radioVolume) + "}";
++  }
++  if (engine_->submit(command)) volumeFeedbackUntilMs_ = brightness ? 0 : nowMs + 1500;
++}
++
++void SimPeriphery::renderControlFeedback(Canvas& canvas, int64_t nowMs) const {
++  if (nowMs >= volumeFeedbackUntilMs_) return;
++  const auto& s = engine_->state().settings();
++  const auto& rt = engine_->state().runtime();
++  // Show the active source's level; idle feedback uses the tone volume.
++  const int volume = rt.mp3Playing ? s.mp3Volume : rt.radioPlaying ? s.radioVolume : s.buzzerVolume;
++  tc002layout::volume(canvas, awtrixFont(FontId::Small), volume);
++}
++#endif
++
+ void SimPeriphery::tick(int64_t nowMs) {
+   ButtonState sample{};
+   board_->pollButtons(sample);
+@@ -41,24 +75,57 @@ void SimPeriphery::tick(int64_t nowMs) {
+   debounce(sample.right, raw_.right, rawChangeMs_[2], stable_.right);
+   const ButtonState& cur = stable_;
+   const bool blocked = engine_->state().settings().blockNavigation;
++#ifndef AWTRIX_TC002
+   const bool lEdge = cur.left && !prev_.left;
+   const bool rEdge = cur.right && !prev_.right;
++#endif
+   const bool sEdge = cur.select && !prev_.select;
+   // Rotating the panel by 180 degrees physically swaps left and right, so the user's swap setting
+   // has to XOR with it rather than simply override it.
+   const bool swapped = cfg_->rotate != cfg_->swapButtons;
+   // Scripts get first refusal on every press; returning true suppresses the built-in navigation.
+   bool consumed = false;
++#ifdef AWTRIX_TC002
++  // The physical -/+ rocker is reserved for volume/brightness. Delay its short
++  // action until release so a brightness hold never also changes the volume.
++  const bool held[2] = {cur.left, cur.right};
++  const bool wasHeld[2] = {prev_.left, prev_.right};
++  for (int i = 0; i < 2; ++i) {
++    const int direction = i == 0 ? -1 : 1;
++    if (held[i] && !wasHeld[i]) {
++      controlPressedMs_[i] = nowMs;
++      controlLong_[i] = false;
++    }
++    if (held[i] && nowMs - controlPressedMs_[i] >= 700 &&
++        (!controlLong_[i] || nowMs - controlRepeatMs_[i] >= 200)) {
++      controlLong_[i] = true;
++      controlRepeatMs_[i] = nowMs;
++      adjustControl(true, direction, nowMs);
++    }
++    if (!held[i] && wasHeld[i] && !controlLong_[i]) adjustControl(false, direction, nowMs);
++  }
++  const int rotation = board_->takeRotation();
++  for (int i = 0; i < std::abs(rotation); ++i) {
++    const bool next = (rotation > 0) != swapped;
++    const bool handled = buttonHook_ && buttonHook_(next ? 2 : 0);
++    if (!handled && !blocked)
++      engine_->submit(Command(next ? CommandType::NextApp : CommandType::PreviousApp));
++  }
++  if (sEdge && buttonHook_) consumed = buttonHook_(1);
++#else
+   if (buttonHook_) {
+     if (lEdge) consumed |= buttonHook_(swapped ? 2 : 0);
+     if (sEdge) consumed |= buttonHook_(1);
+     if (rEdge) consumed |= buttonHook_(swapped ? 0 : 2);
+   }
++#endif
+   if (!consumed) {
++#ifndef AWTRIX_TC002
+     if (lEdge && !blocked)
+       engine_->submit(Command(swapped ? CommandType::NextApp : CommandType::PreviousApp));
+     if (rEdge && !blocked)
+       engine_->submit(Command(swapped ? CommandType::PreviousApp : CommandType::NextApp));
++#endif
+     // One press dismisses the current notification, two inside kDoublePressMs toggle the panel.
+     if (sEdge) {
+       engine_->submit(Command(CommandType::DismissNotify));
+@@ -87,7 +154,7 @@ void SimPeriphery::tick(int64_t nowMs) {
+     rt.lightLevel = lightLevelFromRaw(rt.ldrRaw, lightConfig());
+ 
+     uint8_t bri;
+-    if (s.autoBrightness) {
++    if (s.autoBrightness && board_->hasLightSensor()) {
+       bri = brightnessFromLightLevel(rt.lightLevel, lightConfig());
+     } else {
+       bri = static_cast<uint8_t>(s.brightness < 0 ? 0 : (s.brightness > 255 ? 255 : s.brightness));
+@@ -104,7 +171,11 @@ void SimPeriphery::tick(int64_t nowMs) {
+     if (mv >= 0) {
+       rt.batteryPinMillivolts = static_cast<uint16_t>(mv);
+       rt.batteryVoltage = cellVoltsFromPinMillivolts(mv, cfg_->batteryDividerRatio);
++#ifdef AWTRIX_TC002
++      rt.batteryPercent = tc002::batteryPercent();
++#else
+       rt.batteryPercent = socFromVolts(rt.batteryVoltage);
++#endif
+       rt.lowBattery = cfg_->lowBatteryThreshold > 0 && rt.batteryPercent < cfg_->lowBatteryThreshold;
+     }
+   }
+diff --git a/src/sim/SimPeriphery.h b/src/sim/SimPeriphery.h
+index 44db2f5..b932b46 100644
+--- a/src/sim/SimPeriphery.h
++++ b/src/sim/SimPeriphery.h
+@@ -12,6 +12,7 @@
+ namespace awtrix {
+ 
+ class CoreEngine;
++class Canvas;
+ 
+ // Host twin of PeripheryService. Same debounce and brightness rules, but deliberately without the
+ // median filters and smoothing: an injected sensor value must show up on the next tick.
+@@ -20,6 +21,9 @@ class SimPeriphery {
+   void begin(CoreEngine& engine, IBoard& board, const DeviceConfig& cfg);
+   void setButtonHook(std::function<bool(int)> hook) { buttonHook_ = std::move(hook); }
+   void tick(int64_t nowMs);
++#ifdef AWTRIX_TC002
++  void renderControlFeedback(Canvas& canvas, int64_t nowMs) const;
++#endif
+ 
+  private:
+   LightConfig lightConfig() const;
+@@ -31,6 +35,13 @@ class SimPeriphery {
+   ButtonState prev_{};
+   ButtonState raw_{};
+   ButtonState stable_{};
++#ifdef AWTRIX_TC002
++  void adjustControl(bool brightness, int direction, int64_t nowMs);
++  int64_t volumeFeedbackUntilMs_ = 0;
++  int64_t controlPressedMs_[2] = {0, 0};
++  int64_t controlRepeatMs_[2] = {0, 0};
++  bool controlLong_[2] = {false, false};
++#endif
+   int64_t rawChangeMs_[3] = {0, 0, 0};
+   int64_t lastSelectEdgeMs_ = -100000;
+   static constexpr long kDebounceMs = 35;
+diff --git a/src/sim/SimScriptServices.h b/src/sim/SimScriptServices.h
+index 75c3f89..cd4e1ea 100644
+--- a/src/sim/SimScriptServices.h
++++ b/src/sim/SimScriptServices.h
+@@ -47,6 +47,9 @@ class SimScriptHttp : public script::IScriptHttp {
+       script::HttpResult r;
+       r.id = req.id;
+       httplib::Client cli(origin);
++#ifdef AWTRIX_TC002
++      if(tc002::hardwareEnabled()) cli.set_ca_cert_path(tc002::caCertPath());
++#endif
+       cli.set_connection_timeout(5, 0);
+       cli.set_read_timeout(10, 0);
+       cli.set_follow_location(true);
+@@ -55,12 +58,20 @@ class SimScriptHttp : public script::IScriptHttp {
+       for (const auto& h : req.headers) headers.emplace(h.first, h.second);
+       const std::string type = contentType(req.headers);
+ 
+-      httplib::Result res = send(cli, req.method, target, headers, req.body, type);
+-      if (res) {
+-        r.status = res->status;
+-        script::HttpBodyFilter filter;
+-        filter.begin(req.find, req.keep, maxBytes);
+-        filter.feed(res->body.data(), res->body.size());
++      script::HttpBodyFilter filter;
++      filter.begin(req.find, req.keep, maxBytes);
++      httplib::Request request;
++      request.method=req.method.empty() ? "GET" : req.method;
++      request.path=target; request.headers=headers; request.body=req.body;
++      request.set_header("Content-Type",type);
++      request.response_handler=[&](const httplib::Response& response) {
++        r.status=response.status; return true;
++      };
++      request.content_receiver=[&](const char* bytes,size_t count,uint64_t,uint64_t) {
++        filter.feed(bytes,count); return !filter.done();
++      };
++      auto res=cli.send(request);
++      if (res || (r.status && filter.done())) {
+         r.ok = filter.matched();
+         if (r.ok) r.body = std::move(filter.body());
+       }
+@@ -93,10 +104,9 @@ class SimScriptHttp : public script::IScriptHttp {
+     return cli.Get(target, headers);
+   }
+ 
+-  // Plain http:// only, split into an origin httplib::Client can take and the request target;
+-  // there is no TLS client on the host, so https URLs are rejected outright.
++  // Split HTTP(S) into the origin and request target accepted by httplib.
+   static bool split(const std::string& url, std::string& origin, std::string& target) {
+-    const std::string scheme = "http://";
++    const std::string scheme = url.rfind("https://",0)==0 ? "https://" : "http://";
+     if (url.compare(0, scheme.size(), scheme) != 0) return false;
+     const std::size_t slash = url.find('/', scheme.size());
+     if (slash == std::string::npos) {
+diff --git a/src/sim/main_sim.cpp b/src/sim/main_sim.cpp
+index 09c0786..6dbf185 100644
+--- a/src/sim/main_sim.cpp
++++ b/src/sim/main_sim.cpp
+@@ -16,6 +16,7 @@
+ #include <cstdio>
+ #include <cstring>
+ #include <filesystem>
++#include <fstream>
+ #include <functional>
+ #include <memory>
+ #include <random>
+@@ -77,6 +78,20 @@
+ #include "core/script/ScriptSoundCommand.h"
+ #include "transport/ScriptMqttBridge.h"
+ #include "transport/mqtt/MqttService.h"
++#include "transport/net/ArtnetService.h"
++#ifdef AWTRIX_TC002
++#include "Tc002Hardware.h"
++#include "Tc002System.h"
++#include <csignal>
++#include <unistd.h>
++static volatile std::sig_atomic_t tc002Stop = 0;
++static void tc002Signal(int) { tc002Stop = 1; }
++static int64_t tc002RestartAt = 0;
++static uint64_t tc002SleepMs = 0;
++static bool tc002Reset = false;
++static bool tc002FactoryReset = false;
++static tc002::System tc002System;
++#endif
+ 
+ using namespace awtrix;
+ namespace stdfs = std::filesystem;
+@@ -101,12 +116,21 @@ class SimDisplayService : public IDisplayService {
+ 
+ class SimSystemService : public ISystemService {
+  public:
++#ifdef AWTRIX_TC002
++  void reboot() override { tc002RestartAt=monotonicMs()+300; }
++  void sleep(uint64_t durationMs) override {
++    tc002SleepMs=durationMs; tc002RestartAt=monotonicMs()+300;
++  }
++  void factoryReset() override { tc002FactoryReset=true; reboot(); }
++  void resetSettings() override { tc002Reset=true; reboot(); }
++#else
+   void reboot() override { logf("sim: reboot request ignored (restart the binary instead)"); }
+   void sleep(uint64_t durationMs) override {
+     logf("sim: sleep(%llu ms) ignored", static_cast<unsigned long long>(durationMs));
+   }
+   void factoryReset() override { logf("sim: factory reset ignored (delete simdata/ instead)"); }
+   void resetSettings() override { logf("sim: settings reset ignored (delete simdata/settings.json)"); }
++#endif
+ };
+ 
+ SimBoard g_board;
+@@ -174,18 +198,32 @@ void paceFrame() {
+ }
+ 
+ int main(int argc, char** argv) {
++#ifdef AWTRIX_TC002
++  if(argc==2 && std::strcmp(argv[1],"--dhcp-once")==0) return tc002::dhcpOnce();
++#endif
+ // Windows sleeps in ~15 ms steps by default, which would make paceFrame overshoot every frame.
+ #if defined(_WIN32)
+   timeBeginPeriod(1);
+ #endif
+   awtrix::noise::reseed(std::random_device{}());
+   uint16_t port = 8080;
++  bool portOverride=false;
+   std::string webuiFile = "webui/index.html";
+   SimTerminalMatrix::Mode termMode = SimTerminalMatrix::Mode::Auto;
++#ifdef AWTRIX_TC002
++  bool detach=false;
++  std::string pidFile;
++  int64_t runUntil=0;
++#endif
+   for (int i = 1; i < argc; ++i) {
+     const bool hasVal = i + 1 < argc;
+-    if (std::strcmp(argv[i], "--port") == 0 && hasVal)
+-      port = static_cast<uint16_t>(atoi(argv[++i]));
++    if (std::strcmp(argv[i], "--port") == 0 && hasVal) {
++      char* end=nullptr; long value=std::strtol(argv[++i],&end,10);
++      if(!*argv[i] || *end || value<1 || value>65535) {
++        std::fprintf(stderr,"--port must be between 1 and 65535\n"); return 2;
++      }
++      port=static_cast<uint16_t>(value); portOverride=true;
++    }
+     else if (std::strcmp(argv[i], "--data") == 0 && hasVal)
+       sim::setDataDir(argv[++i]);
+     else if (std::strcmp(argv[i], "--webui") == 0 && hasVal)
+@@ -194,7 +232,27 @@ int main(int argc, char** argv) {
+       termMode = SimTerminalMatrix::Mode::On;
+     else if (std::strcmp(argv[i], "--no-matrix") == 0)
+       termMode = SimTerminalMatrix::Mode::Off;
++#ifdef AWTRIX_TC002
++    else if (std::strcmp(argv[i], "--hardware") == 0)
++      tc002::setHardwareEnabled(true);
++    else if (std::strcmp(argv[i], "--daemon") == 0) detach=true;
++    else if (std::strcmp(argv[i], "--pidfile") == 0 && hasVal) pidFile=argv[++i];
++    else if (std::strcmp(argv[i], "--run-for") == 0 && hasVal) {
++      char* end=nullptr; long seconds=std::strtol(argv[++i],&end,10);
++      if(!*argv[i] || *end || seconds<1 || seconds>86400) {
++        std::fprintf(stderr,"--run-for must be between 1 and 86400 seconds\n"); return 2;
++      }
++      runUntil=monotonicMs()+seconds*1000LL;
++    }
++    else if (std::strcmp(argv[i], "--version") == 0) {
++      std::puts(AWTRIX_NG_VERSION); return 0;
++    }
++#endif
+   }
++#ifdef AWTRIX_TC002
++  if(detach && daemon(1,1)<0) { std::perror("daemon"); return 1; }
++  if(!pidFile.empty()) { std::ofstream f(pidFile); f<<getpid()<<'\n'; }
++#endif
+ 
+   awtrix::fs::begin();
+ 
+@@ -221,9 +279,22 @@ int main(int argc, char** argv) {
+ 
+   DeviceConfig& cfg = g_cfg;
+   cfg.load();
++#ifdef AWTRIX_TC002
++  cfg.panelWidth=52; cfg.panels=1;
++  cfg.batteryDividerRatio=1.0f;
++  if(!portOverride) port=tc002::hardwareEnabled() ? cfg.webPort : 8080;
++  setenv("TZ", cfg.tz.c_str(), 1); tzset();
++  std::signal(SIGTERM, tc002Signal); std::signal(SIGINT, tc002Signal);
++#endif
+   logbuf::setVerbose(cfg.debugMode);
+ 
++#ifdef AWTRIX_TC002
++  DeviceConfig networkConfig=cfg; networkConfig.webPort=port;
++  tc002System.begin(networkConfig);
++#endif
+   g_board.begin();
++  static ArtnetService artnet;
++  if(cfg.artnet) artnet.begin();
+   g_board.setMatrixLayout(cfg.matrixLayout());
+   g_canvas = new Canvas(g_board.matrixWidth(), g_board.matrixHeight());
+   g_power = new render::PowerAnimator(g_board.matrixWidth(), g_board.matrixHeight());
+@@ -243,6 +314,10 @@ int main(int argc, char** argv) {
+   // once instead of leaving the link status at its "never configured" default.
+   net::applyWifiAssoc(g_engine->state().runtime().wifi, net::WifiAssoc::Connected, true, "sim",
+                       "127.0.0.1");
++#ifdef AWTRIX_TC002
++  net::applyWifiAssoc(g_engine->state().runtime().wifi, net::WifiAssoc::Connected, true,
++    cfg.wifiSsid,tc002::ipAddress());
++#endif
+ 
+   nvs::loadSettings(g_engine->state().settings());
+   apporder::load(*g_engine);
+@@ -304,13 +379,23 @@ int main(int argc, char** argv) {
+ 
+   if (g_term.begin(termMode, port, g_engine))
+     g_board.onShow = [](const Canvas& c, uint8_t bri) { g_term.render(c, bri); };
++#ifdef AWTRIX_TC002
++  g_board.onShow = [](const Canvas& c, uint8_t bri) {
++    if(g_term.active()) g_term.render(c,bri);
++    g_board.showHardware(c);
++  };
++#endif
+ 
+   logf("boot: AWTRIX NG %s on %s (data: %s)", AWTRIX_NG_VERSION, g_board.name(),
+        sim::dataDir().c_str());
+ 
+   // The device derives this from its chip ID; a fixed one keeps MQTT topics and the hostname stable
+   // across restarts, which is what the end-to-end tests rely on.
++#ifdef AWTRIX_TC002
++  const std::string uid = tc002::uid();
++#else
+   const std::string uid = "simulator";
++#endif
+   if (!g_http.begin(port, *g_engine, g_board, *g_canvas, uid, cfg, webuiFile)) return 1;
+   g_http.setOnConfigChanged([] {
+     // A layout change only takes effect live while the width still matches: a different width would
+@@ -321,11 +406,23 @@ int main(int argc, char** argv) {
+       g_scripts->setLimit(g_cfg.scriptLimit < 0 ? 0 : static_cast<std::size_t>(g_cfg.scriptLimit));
+     script::setMaxSourceBytes(static_cast<std::size_t>(g_cfg.scriptMaxBytes));
+     logbuf::setVerbose(g_cfg.debugMode);
++#ifdef AWTRIX_TC002
++    setenv("TZ",g_cfg.tz.c_str(),1); tzset();
++    tc002RestartAt=monotonicMs()+500;
++#endif
+   });
+   {
++#ifndef AWTRIX_TC002
+   g_pcm = std::unique_ptr<sim::FakePcmSink>(new sim::FakePcmSink(*g_engine));
+   g_engine->setPcmSink(g_pcm.get());
+   g_audio.setPcm(g_pcm.get());
++#else
++  if(g_board.audio().available()) {
++    g_board.audio().attach(*g_engine);
++    g_engine->setPcmSink(&g_board.audio());
++    g_audio.setPcm(&g_board.audio());
++  }
++#endif
+   // Pushed once the sinks are all attached, so the PCM gains are not left at their defaults.
+   g_engine->state().emit(StateEvent::SettingsChanged);
+ 
+@@ -338,6 +435,7 @@ int main(int argc, char** argv) {
+   g_hostResolver = net::makeHostResolver();
+   g_mqtt.begin(*g_engine, g_board, cfg, uid, uid,
+                cfg.hostname.empty() ? std::string("AWTRIX NG") : cfg.hostname, *g_hostResolver);
++  g_mqtt.setScriptingRunning(cfg.scriptingEnabled);
+   display.configure([](const std::string& s, const std::string& p) { g_mqtt.publish(s, p, false); },
+                     g_canvas);
+   g_periphery.setButtonHook([](int btn) {
+@@ -451,12 +549,50 @@ int main(int argc, char** argv) {
+   });
+ 
+   if (!g_term.active()) {
++#ifdef AWTRIX_TC002
++    std::printf("AWTRIX NG %s on TC002 @ http://%s:%u\n",
++                AWTRIX_NG_VERSION,tc002::ipAddress().c_str(),static_cast<unsigned>(port));
++#else
+     std::printf("AWTRIX NG %s simulator @ http://localhost:%u  (Ctrl+C to quit)\n",
+                 AWTRIX_NG_VERSION, static_cast<unsigned>(port));
++#endif
+     std::fflush(stdout);
+   }
+ 
+   for (;;) {
++#ifdef AWTRIX_TC002
++    if(runUntil && monotonicMs()>=runUntil) tc002Stop=1;
++    if(tc002RestartAt && monotonicMs()>=tc002RestartAt) {
++      g_board.audio().stopAll();
++      tc002System.stop();
++      g_mqtt.publish("availability","offline",true);
++      if(tc002FactoryReset) {
++        if(tc002::hardwareEnabled()) tc002::resetWifi();
++        std::error_code ec; stdfs::remove_all(stdfs::u8path(sim::dataDir()),ec);
++      } else if(tc002Reset) {
++        std::error_code ec; stdfs::remove(stdfs::u8path(sim::hostPath("/settings.json")),ec);
++      } else nvs::saveSettings(g_engine->state().settings());
++      g_canvas->clear(0); g_board.show(*g_canvas);
++      g_http.stop();
++      if(tc002SleepMs) {
++        // Linux has no RTC wakealarm on this board. Keep the panel dark and services silent
++        // for the requested duration, then restart the application.
++        const auto deadline=monotonicMs()+static_cast<int64_t>(tc002SleepMs);
++        while(!tc002Stop && monotonicMs()<deadline) usleep(10000);
++      }
++      if(tc002Stop) return 0;
++      execv(argv[0],argv);
++      std::perror("TC002 restart"); return 1;
++    }
++    if(tc002Stop) {
++      g_board.audio().stopAll();
++      tc002System.stop();
++      g_mqtt.publish("availability","offline",true);
++      nvs::saveSettings(g_engine->state().settings());
++      g_canvas->clear(0); g_board.show(*g_canvas);
++      return 0;
++    }
++#endif
+     const int64_t now = monotonicMs();
+     g_board.setNow(now);
+     {
+@@ -479,6 +615,12 @@ int main(int argc, char** argv) {
+     g_http.tick();
+     g_mqtt.tick();
+     g_periphery.tick(now);
++#ifdef AWTRIX_TC002
++    if(tc002::hardwareEnabled())
++      net::applyWifiAssoc(g_engine->state().runtime().wifi,
++        tc002::wifiConnected() ? net::WifiAssoc::Connected : net::WifiAssoc::Disconnected,
++        true,tc002::wifiSsid(),tc002::ipAddress());
++#endif
+     g_audio.tick(now);
+     g_engine->tick(now);
+ 
+@@ -512,9 +654,12 @@ int main(int argc, char** argv) {
+         if (g_engine->state().runtime().moodlightMode) {
+           g_canvas->clear(g_engine->state().runtime().moodlightColor);
+           g_board.setBrightness(g_engine->state().runtime().moodlightBrightness);
+-        } else {
++        } else if (!artnet.tick(*g_canvas,now)) {
+           g_pipeline->renderFrame(*g_canvas, now);
+         }
++#ifdef AWTRIX_TC002
++        g_periphery.renderControlFeedback(*g_canvas, now);
++#endif
+         g_power->finish(*g_canvas);
+         break;
+     }
+diff --git a/src/transport/DeviceStateJson.cpp b/src/transport/DeviceStateJson.cpp
+index 47968b6..a7be3c0 100644
+--- a/src/transport/DeviceStateJson.cpp
++++ b/src/transport/DeviceStateJson.cpp
+@@ -14,6 +14,9 @@
+ #include "hal/IBoard.h"
+ #include "system/HeapCaps.h"
+ #include "system/MonotonicClock.h"
++#ifdef AWTRIX_TC002
++#include "Tc002Hardware.h"
++#endif
+ 
+ namespace awtrix {
+ 
+@@ -63,6 +66,14 @@ std::string buildDeviceStateJson(CoreEngine& engine, IBoard& board, const std::s
+   facts.hasHumidity = sensors.hasHumidity();
+   facts.hasPressure = sensors.hasPressure();
+   facts.scriptingRunning = scriptingRunning;
++#ifdef AWTRIX_TC002
++  facts.boardType="tc002"; facts.soc="ssd202d";
++  facts.ipAddress=tc002::ipAddress();
++  facts.wifiRssi=tc002::wifiRssi();
++  facts.freeHeapBytes=tc002::availableMemory();
++  facts.minFreeHeapBytes=0; facts.largestFreeBlockBytes=0;
++  facts.psramTotalBytes=0; facts.psramFreeBytes=0;
++#endif
+   return buildDeviceJson(engine, uid, facts);
+ }
+ 
+diff --git a/src/transport/net/ArtnetService.cpp b/src/transport/net/ArtnetService.cpp
+index c3f8603..7f636dc 100644
+--- a/src/transport/net/ArtnetService.cpp
++++ b/src/transport/net/ArtnetService.cpp
+@@ -1,6 +1,10 @@
+ #include "transport/net/ArtnetService.h"
+ 
+ #include <WiFi.h>
++#ifdef AWTRIX_TC002
++#include "Tc002Hardware.h"
++#include <arpa/inet.h>
++#endif
+ 
+ #include <algorithm>
+ #include <cstdint>
+@@ -39,7 +43,11 @@ void ArtnetService::sendPollReply() {
+   std::memcpy(r, "Art-Net\0", 8);
+   r[8] = kOpPollReply & 0xFF;
+   r[9] = (kOpPollReply >> 8) & 0xFF;
++#ifdef AWTRIX_TC002
++  const IPAddress ip(inet_addr(tc002::ipAddress().c_str()));
++#else
+   const IPAddress ip = WiFi.localIP();
++#endif
+   r[10] = ip[0]; r[11] = ip[1]; r[12] = ip[2]; r[13] = ip[3];
+   r[14] = kArtnetPort & 0xFF;
+   r[15] = (kArtnetPort >> 8) & 0xFF;
+@@ -51,7 +59,12 @@ void ArtnetService::sendPollReply() {
+   r[174] = 0x80;
+   r[182] = 0x80;
+   uint8_t mac[6];
++#ifdef AWTRIX_TC002
++  const auto uid=tc002::uid();
++  for(int i=0;i<6;++i) mac[i]=std::strtoul(uid.substr(i*2,2).c_str(),nullptr,16);
++#else
+   WiFi.macAddress(mac);
++#endif
+   std::memcpy(r + 201, mac, 6);
+   udp_.replyTo(kArtnetPort, r, sizeof(r));
+ }
+diff --git a/src/transport/net/UdpSocket.cpp b/src/transport/net/UdpSocket.cpp
+index d49c21a..e750dbe 100644
+--- a/src/transport/net/UdpSocket.cpp
++++ b/src/transport/net/UdpSocket.cpp
+@@ -1,6 +1,14 @@
+ #include "transport/net/UdpSocket.h"
+ 
++#ifdef AWTRIX_TC002
++#include <sys/socket.h>
++#include <arpa/inet.h>
++#include <unistd.h>
++#include <cerrno>
++#include <fcntl.h>
++#else
+ #include <lwip/sockets.h>
++#endif
+ 
+ #include <cstring>
+ 
+@@ -10,6 +18,9 @@ bool UdpSocket::open(uint16_t port) {
+   close();
+   fd_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+   if (fd_ < 0) return false;
++#ifdef AWTRIX_TC002
++  fcntl(fd_,F_SETFD,FD_CLOEXEC);
++#endif
+ 
+   int on = 1;
+   ::setsockopt(fd_, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+diff --git a/webui/index.html b/webui/index.html
+index 6bf5ead..aa2fdf5 100644
+--- a/webui/index.html
++++ b/webui/index.html
+@@ -3,7 +3,7 @@
+ <head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+-<title>AWTRIX NG</title>
++<title>AWTRIX NG TC002</title>
+ <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 19 19'%3E%3Crect width='19' height='19' rx='4' fill='%230d1117'/%3E%3Cpath fill='%23262c36' d='M2 2h3v3H2zM14 2h3v3h-3zM6 6h3v3H6zM10 6h3v3h-3zM6 14h3v3H6zM10 14h3v3h-3z'/%3E%3Cpath fill='%23fff' d='M6 2h3v3H6zM10 2h3v3h-3zM2 6h3v3H2zM14 6h3v3h-3zM2 10h3v3H2zM6 10h3v3H6zM10 10h3v3h-3zM14 10h3v3h-3zM2 14h3v3H2zM14 14h3v3h-3z'/%3E%3C/svg%3E">
+ <style>
+ :root{
+@@ -45,6 +45,9 @@ button.icon{padding:7px 10px}
+ button.icon.kofi{background:#00b9fe;border-color:#00b9fe;height:36px;display:inline-flex;align-items:center;justify-content:center}
+ button.icon.kofi:hover{border-color:#00b9fe;filter:brightness(1.08)}
+ .kofilogo{width:18px;height:18px;flex:none}
++a.repo-link{color:var(--fg);background:var(--card2);border:1px solid var(--border);border-radius:7px;
++  padding:7px 10px;height:36px;display:inline-flex;align-items:center;justify-content:center}
++a.repo-link:hover{border-color:var(--acc)}
+ input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--border);
+   border-radius:7px;padding:7px 10px;width:100%;min-width:0}
+ input:focus,select:focus{outline:none;border-color:var(--acc)}
+@@ -63,6 +66,8 @@ input[type=color]{height:34px;flex:none;cursor:pointer}
+ .cpick:focus-within .chex{box-shadow:inset 0 0 0 2px var(--acc)}
+ input[type=range]{padding:0;accent-color:var(--acc);border:none;background:none}
+ input[type=file]{display:none}
++footer.credit{max-width:1060px;margin:0 auto;padding:8px 16px 24px;color:var(--dim);font-size:12px;line-height:1.5}
++footer.credit a{color:var(--dim);text-decoration:underline}
+ .topbar{position:sticky;top:0;z-index:20;background:var(--bg)}
+ .topbar>header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);
+   background:var(--bg)}
+@@ -163,7 +168,7 @@ main>.wide{grid-column:1/-1}
+ .ic{width:13px;height:13px;flex:none;stroke:currentColor;fill:none;stroke-width:2;
+   stroke-linecap:round;stroke-linejoin:round}
+ .hero{grid-column:1/-1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+-canvas#screen{display:block;width:100%;aspect-ratio:4/1;image-rendering:pixelated;background:#000}
++canvas#screen{display:block;width:100%;aspect-ratio:52/16;image-rendering:pixelated;background:#000}
+ .hctl{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--border);flex-wrap:wrap}
+ .hctl .lab{font-size:var(--f1);color:var(--dim)}
+ .hctl input[type=range]{flex:1;min-width:110px;width:auto}
+@@ -576,13 +581,15 @@ canvas#screen{display:block;width:100%;aspect-ratio:4/1;image-rendering:pixelate
+ <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.5C10.5 5 8.5 4.5 6 4.5H4v13h2c2.5 0 4.5.5 6 2 1.5-1.5 3.5-2 6-2h2v-13h-2c-2.5 0-4.5.5-6 2z"/><path d="M12 6.5v13"/></symbol>
+ <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01"/></symbol>
+ <symbol id="i-kofi" viewBox="7 14 52 37"><g transform="matrix(1.9656019,0,0,1.9656019,0,-51.10565)"><path transform="translate(0,26)" fill="#fff" d="m 22.257931,8.8 h 1.607617 C 26.966324,8.8 29.48,11.313676 29.48,14.414452 v 0.330015 c 0,3.100776 -2.513676,5.614452 -5.614452,5.614452 h -1.607617 v 1.689795 c 0,1.431128 -1.160158,2.591286 -2.591286,2.591286 H 7.4312857 C 6.0001581,24.64 4.84,23.479842 4.84,22.048714 V 10.095643 C 4.84,9.3800791 5.4200791,8.8 6.1356429,8.8 Z m 0,2.996757 v 5.565405 h 1.465573 c 1.536844,0 2.782703,-1.245858 2.782703,-2.782702 0,-1.536845 -1.245859,-2.782703 -2.782703,-2.782703 z"/><path transform="translate(4.84,34.8)" fill="#ff5e5b" d="M 8.36,5.2768458 C 8.7602942,4.1056152 9.7089414,3.52 11.205941,3.52 c 2.2455,0 3.077965,2.7936503 1.900934,4.62 C 12.322188,9.3575665 10.739896,10.897567 8.36,12.76 5.9801039,10.897567 4.3978123,9.3575665 3.613125,8.14 2.4360941,6.3136503 3.2685587,3.52 5.5140587,3.52 7.0110586,3.52 7.9597058,4.1056152 8.36,5.2768458 Z"/></g></symbol>
++<symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3-.3 6.2-1.5 6.2-7A5.4 5.4 0 0 0 18.8 4 5 5 0 0 0 18.7 0S17.5-.3 14.5 1.6a15 15 0 0 0-7 0C4.5-.3 3.3 0 3.3 0A5 5 0 0 0 3.2 4a5.4 5.4 0 0 0-1.5 3.8c0 5.4 3.2 6.6 6.2 7A3.4 3.4 0 0 0 7 17.4V22" transform="translate(2 2) scale(.85)"/></symbol>
+ </defs></svg>
+ <div class="topbar">
+ <header>
+   <svg class="lg" aria-hidden="true"><use href="#i-logo"/></svg>
+-  <h1 id="brand">AWTRIX NG</h1>
++  <h1 id="brand">AWTRIX NG TC002</h1>
+   <span class="grow"></span>
+-  <button class="icon kofi" id="kofibtn" title="Support me"><svg class="kofilogo" aria-hidden="true"><use href="#i-kofi"/></svg></button>
++  <button class="icon kofi" id="kofibtn" title="Support Blueforcer, the AWTRIX NG author, on Ko-fi"><svg class="kofilogo" aria-hidden="true"><use href="#i-kofi"/></svg></button>
++  <a class="repo-link" id="github-link" href="https://github.com/sanderdw/awtrix-ng-tc002" target="_blank" rel="noopener noreferrer" title="GitHub repository" aria-label="GitHub repository"><svg class="ic" aria-hidden="true"><use href="#i-github"/></svg></a>
+   <button class="icon" id="docsbtn" title="Documentation"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg></button>
+   <button class="icon" id="themebtn" title="Theme"><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg></button>
+   <button class="icon" id="langbtn" title="Language"></button>
+@@ -590,6 +597,7 @@ canvas#screen{display:block;width:100%;aspect-ratio:4/1;image-rendering:pixelate
+ <nav id="nav"></nav>
+ </div>
+ <main id="view"></main>
++<footer class="credit">AWTRIX NG &copy; <a href="https://github.com/Blueforcer/awtrix-ng" target="_blank" rel="noopener noreferrer">Stephan M&uuml;hl (Blueforcer)</a>, <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener noreferrer">PolyForm Noncommercial 1.0.0</a>. Unofficial TC002 port; not a Blueforcer or Ulanzi release. Documentation and the icon editor are hosted by the upstream project: please <a href="https://ko-fi.com/blueforcer" target="_blank" rel="noopener noreferrer">support it</a>.</footer>
+ <div id="toasts"></div>
+ <script>
+ 'use strict';
+@@ -774,7 +782,7 @@ const I18N={en:{
+   bkCaptiveHint:'The Wi‑Fi sign‑in popup can’t upload files. To restore, open this page in a browser:',
+   bkRestored:'Backup restored',bkWarnings:'warning(s)',bkRebootQ:'Restore applied. Reboot now to use it?',
+   storage:'Storage',of:'of',free:'free',
+-  iconshelp:'8×8 to 32×8 PNG, JPG or animated GIF. Drag & drop files here or click to choose.',
++  iconshelp:'16×16 icons or images up to 52×16 (PNG, JPG or animated GIF). Existing 8×8 icons display at 16×16 automatically. Drag & drop files here or click to choose.',
+   editorTab:'Icon Editor',
+   edLoading:'Loading the editor…',
+   edUnreachable:'The editor did not load.',
+@@ -925,7 +933,7 @@ const I18N={en:{
+   bkCaptiveHint:'Der WLAN-Anmelde-Dialog kann keine Dateien hochladen. Zum Wiederherstellen diese Seite im Browser öffnen:',
+   bkRestored:'Sicherung wiederhergestellt',bkWarnings:'Warnung(en)',bkRebootQ:'Wiederhergestellt. Jetzt neu starten?',
+   storage:'Speicher',of:'von',free:'frei',
+-  iconshelp:'8×8 bis 32×8 PNG, JPG oder animiertes GIF. Dateien hierher ziehen oder klicken zum Auswählen.',
++  iconshelp:'16×16 Icons oder Bilder bis 52×16 (PNG, JPG oder animiertes GIF). Vorhandene 8×8 Icons werden automatisch auf 16×16 vergrößert. Dateien hierher ziehen oder klicken zum Auswählen.',
+   editorTab:'Icon-Editor',
+   edLoading:'Editor wird geladen…',
+   edUnreachable:'Der Editor wurde nicht geladen.',
+@@ -1320,6 +1328,14 @@ const SOUND_KEYS=Object.keys(SYSF).filter(k=>SYSF[k].api==='settings');
+ const S={transitions:[],stats:null,ap:false,sysHost:'',sysUid:'',gpio:null,aud:null,
+   scriptMax:0,scriptsOff:null};
+ function readAudioCaps(caps){
++  S.matrix=caps.matrix||null;
++  if(caps.gpio?.soc==='ssd202d'){
++    for(const key of ['autoBrightness','useCelsius','temperatureColor','humidityColor'])
++      FIELDS[key].g='hidden';
++    for(const key of ['minBrightness','maxBrightness','tempDecimals','buttonCallback'])
++      SYSF[key].g='hidden';
++    FIELDS.brightness.h='Sets the display brightness.|Stellt die Display-Helligkeit ein.';
++  }
+   const a=caps.audio||{};
+   S.aud={buzzer:a.buzzer===true,track:a.track===true,mp3:a.mp3===true,radio:a.radio===true};
+ }
+@@ -1334,6 +1350,14 @@ async function scriptsOff(){
+   return S.scriptsOff;
+ }
+ function applyGpioCaps(c){
++  if(c.fixed){
++    for(const [key,field] of Object.entries(SYSF))
++      if(field.g==='gpio'||['panelWidth','panels','panelStart','panelWiring','panelSerpentine',
++        'panelChainReverse','panelChainSerpentine','dfplayer','tempOffset','humOffset',
++        'batteryDividerRatio','ldrFactor','ldrGamma','ldrOnGround','brightnessSmoothing'].includes(key))
++        field.g='hidden';
++    return;
++  }
+   const dflt=c.defaults||{};
+   const gp=p=>'GPIO '+p;
+   const inR=(rs,p)=>(rs||[]).some(r=>p>=r[0]&&p<=r[1]);
+@@ -1795,12 +1819,13 @@ function gifEncode(frames,W,H,SC){
+   return new Uint8Array(b);
+ }
+ const gifGap=SC=>SC>1?Math.max(1,Math.round(SC/10)):0;
+-const ICON_MAX=32;
++const ICON_MAX=52,ICON_MAX_HEIGHT=16;
++const ICON_SIZES=['16x16','52x16','8x8','32x8'];
+ async function imgToGif(src,tw,th){
+   const bmp=(typeof ImageBitmap!=='undefined'&&src instanceof ImageBitmap)?src:await createImageBitmap(src);
+   const w=tw||bmp.width,h=th||bmp.height;
+   const cv=el('canvas',{width:w,height:h}),g=cv.getContext('2d');
+-  g.imageSmoothingEnabled=w!==bmp.width||h!==bmp.height;
++  g.imageSmoothingEnabled=false;
+   g.drawImage(bmp,0,0,w,h);
+   if(bmp.close)bmp.close();
+   const d=g.getImageData(0,0,w,h).data,px=[];
+@@ -1816,7 +1841,7 @@ async function iconAsGif(file,name){
+     const bmp=await createImageBitmap(file);
+     const w=bmp.width,h=bmp.height;
+     if(bmp.close)bmp.close();
+-    if(w>ICON_MAX||h>ICON_MAX)return null;
++    if(w>ICON_MAX||h>ICON_MAX_HEIGHT)return null;
+     return{blob:await imgToGif(file),name:String(name).replace(/\.[^.]+$/,'')+'.gif'};
+   }catch(e){return null;}
+ }
+@@ -1876,9 +1901,10 @@ function vitalTile(d){
+ const metaItem=(k,v,cls)=>el('span',null,k+' ',el('b',cls?{class:cls}:null,String(v)));
+ function viewDash(view){
+   const SC=10;
+-  const cv=el('canvas',{id:'screen',width:32*SC,height:8*SC,role:'img','aria-label':t('livepre')});
++  const cv=el('canvas',{id:'screen',width:52*SC,height:16*SC,role:'img','aria-label':t('livepre')});
+   const ctx=cv.getContext('2d');
+-  let pw=32,ph=8;
++  cv.style.aspectRatio='52/16';
++  let pw=52,ph=16;
+   const bri=el('input',{type:'range',min:0,max:255,value:S.stats?S.stats.brightness:120,
+     'aria-label':t('brightness')});
+   const briVal=el('span',{class:'val'},String(S.stats?S.stats.brightness:120));
+@@ -1926,7 +1952,7 @@ function viewDash(view){
+     const{data}=await api('/api/v1/display/screen',{timeout:4000});
+     const px=data&&data.pixels;
+     if(!Array.isArray(px))return;
+-    const W=data.width||32,H=data.height||8;
++    const W=data.width||52,H=data.height||16;
+     if(W!==pw||H!==ph){cv.width=W*SC;cv.height=H*SC;cv.style.aspectRatio=W+'/'+H;pw=W;ph=H;}
+     shot=px;
+     if(rec){
+@@ -2243,7 +2269,7 @@ class MyApp
+ 
+   def draw()           # every frame while visible
+     clear()
+-    # the matrix is 32x8; y is the text BASELINE
++    # the matrix is 52x16; coordinates are physical pixels; y is the text BASELINE
+     text(1, 6, "n=" + str(self.n), 0x00A0FF)
+   end
+ end
+@@ -3062,6 +3088,10 @@ function systemPage(view,data){
+     data.tzName=TZFIRST.get(data.tz)||'UTC';
+   const page=systemSettingsPage(view,data);
+   const sysFields=renderSettingsInto(page,data,SYSF,SYS_GROUPS);
++  if(S.matrix&&S.matrix.fixed)
++    page.section('matrix',t('pnSize'),null,[actionRow('TC002',null,[
++      el('div',{class:'badge good'},S.matrix.width+' × '+S.matrix.height+' = '+
++        (S.matrix.width*S.matrix.height)+' '+t('pnLeds'))])]);
+   advancedSection(page,data,SYSF);
+   if(sysFields.hostname&&S.sysHost)
+     sysFields.hostname.row.querySelector('input').placeholder=S.sysHost;
+@@ -3150,7 +3180,7 @@ function progressRow(){
+     set(p){fill.style.width=(p*100).toFixed(1)+'%';}};
+ }
+ function maintenanceSection(page){
+-  const fwIn=el('input',{type:'file',accept:'.bin'});
++  const fwIn=el('input',{type:'file',accept:S.matrix&&S.matrix.fixed?'.img':'.bin'});
+   const fwBtn=el('button',null,t('choose'));
+   const fw=progressRow();
+   fwBtn.addEventListener('click',()=>fwIn.click());
+@@ -3179,7 +3209,7 @@ function maintenanceSection(page){
+   });
+   const ver=S.stats&&S.stats.version;
+   page.section('maint',t('maint'),t('mainthelp'),[
+-    actionRow(t('fwfile'),ver?t('version')+' '+ver:null,[fwBtn,fwIn]),
++    actionRow(S.matrix&&S.matrix.fixed?t('fwfile').replace('.bin','.img'):t('fwfile'),ver?t('version')+' '+ver:null,[fwBtn,fwIn]),
+     fw.row,
+     actionRow(t('reboot'),null,[rebootBtn]),
+     actionRow(t('resetset'),t('resetsetH'),[resetBtn]),
+@@ -3276,7 +3306,19 @@ function uploadZone(dir,accept,hint,onDone,asGif){
+   return el('div',null,zone,fileIn);
+ }
+ let assetRev=0;
++async function validateIcon(file){
++  const header=new Uint8Array(await file.slice(0,10).arrayBuffer());
++  let w,h;
++  if(String.fromCharCode(...header.slice(0,3))==='GIF'){
++    w=header[6]|header[7]<<8;h=header[8]|header[9]<<8;
++  }else{
++    const bmp=await createImageBitmap(file);w=bmp.width;h=bmp.height;bmp.close();
++  }
++  if(!(w>0&&h>0&&w<=ICON_MAX&&h<=ICON_MAX_HEIGHT))
++    throw new Error('Image must fit within 52×16 pixels.');
++}
+ async function uploadFile(file,dir,name,onProgress){
++  if(dir==='/ICONS')await validateIcon(file);
+   const url=dir.startsWith('/api/')?dir:'/api/v1/files?dir='+encodeURIComponent(dir);
+   const x=await xhrPost(url,'file',file,name,onProgress);
+   if(x.status>=300)throw new Error('HTTP '+x.status);
+@@ -3319,7 +3361,7 @@ function viewIcons(view){
+   view.append(storSlot);
+   view.append(el('div',{class:'card wide'},
+     el('h2',null,t('icons')),el('div',{class:'ghelp'},t('iconshelp')),
+-    uploadZone('/ICONS','.png,.jpg,.jpeg,.gif','⬆ '+t('upload')+' (.png / .jpg / .gif, 8×8)',reload,true),
++    uploadZone('/ICONS','.png,.jpg,.jpeg,.gif','⬆ '+t('upload')+' (.png / .jpg / .gif, 16×16 – 52×16)',reload,true),
+     lametricCard(reload),
+     iconsGrid));
+   reload();
+@@ -3416,9 +3458,15 @@ const LIVE_NAME='draw-preview';
+ let piskelLiveOn=false,lastLiveErr='';
+ async function piskelLive(m){
+   piskelLiveOn=true;
+-  const body=m.mode==='bitmap'
+-    ?{hold:true,stack:false,name:LIVE_NAME,text:'',draw:[['bitmap',0,0,m.w,m.h,m.dataBase64]]}
+-    :{hold:true,stack:false,name:LIVE_NAME,text:'',icon:m.dataBase64};
++  let data=m.dataBase64;
++  if(m.mode==='bitmap'){
++    if(!(m.w>0&&m.h>0&&m.w<=ICON_MAX&&m.h<=ICON_MAX_HEIGHT))return;
++    const raw=atob(data),px=[];
++    if(raw.length!==m.w*m.h*3)return;
++    for(let i=0;i<raw.length;i+=3)px.push(raw.charCodeAt(i)<<16|raw.charCodeAt(i+1)<<8|raw.charCodeAt(i+2));
++    data=btoa(String.fromCharCode(...gifEncode([{t:0,px}],m.w,m.h,1)));
++  }
++  const body={hold:true,stack:false,name:LIVE_NAME,text:'',icon:data};
+   try{await post('/api/v1/notifications',body);lastLiveErr='';}
+   catch(e){if(e.message!==lastLiveErr){lastLiveErr=e.message;toast(e.message,false);}}
+ }
+@@ -3434,7 +3482,7 @@ window.addEventListener('message',e=>{
+     piskelReady=true;
+     const l=$('#piskelFrame')&&document.querySelector('.piskelload');if(l)l.remove();
+     notifyPiskelTheme();
+-    postToPiskel({type:'config',sizes:['8x8','32x8']});
++    postToPiskel({type:'config',sizes:ICON_SIZES});
+     if(pendingEditIcon){const n=pendingEditIcon;pendingEditIcon=null;piskelSendIcon(n);}
+   }else if(m.type==='save')piskelSave(m);
+   else if(m.type==='list')piskelSendList();
+@@ -3449,7 +3497,7 @@ function viewEditor(view){
+   piskelReady=false;
+   const url=getPiskelUrl();
+   const theme=document.documentElement.dataset.theme==='light'?'light':'dark';
+-  const src=url+(url.includes('?')?'&':'?')+'theme='+encodeURIComponent(theme)+'&sizes=8x8,32x8&host=awtrix';
++  const src=url+(url.includes('?')?'&':'?')+'theme='+encodeURIComponent(theme)+'&sizes='+ICON_SIZES.join(',')+'&host=awtrix';
+   const loading=el('div',{class:'piskelload'},el('span',{class:'spin'}),el('span',null,t('edLoading')));
+   const frame=el('iframe',{id:'piskelFrame',src,title:t('editorTab'),allow:'clipboard-read; clipboard-write'});
+   view.append(el('div',{class:'piskelwrap wide'},loading,frame));

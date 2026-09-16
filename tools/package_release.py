@@ -16,7 +16,7 @@ for name in files:
     if name=='manifest.json': continue
     payload=(dist/name).read_bytes()
     assert len(payload)==manifest[name]['bytes'] and hashlib.sha256(payload).hexdigest()==manifest[name]['sha256'],name+' does not match manifest'
-source=['.gitignore','CMakeLists.txt','cmake','src','tools','tests','upstream','vendor','assets','docs','pyproject.toml','uv.lock','README.md','CONTRIBUTING.md','WORKLOG.md','LICENSE.md','THIRD-PARTY-NOTICES.md']
+source=['.gitignore','CMakeLists.txt','cmake','src','tools','tests','patches','upstream','vendor','assets','docs','pyproject.toml','uv.lock','README.md','CONTRIBUTING.md','WORKLOG.md','LICENSE.md','THIRD-PARTY-NOTICES.md']
 def include(info):
     return None if any(x in info.name.split('/') for x in ['__pycache__','.pio','.pytest_cache','node_modules','.git']) else info
 with tarfile.open(dist/'awtrix-tc002-source.tar.gz','w:gz') as archive:

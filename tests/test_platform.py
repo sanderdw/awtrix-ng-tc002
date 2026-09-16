@@ -7,9 +7,12 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+import sys
 import pytest
 
 ROOT=Path(__file__).parents[1]
+sys.path.insert(0,str(ROOT/'tools'))
+from paths import webui
 
 def available_port():
     with socket.socket() as s:
@@ -20,7 +23,7 @@ def app(tmp_path):
     port=available_port()
     (tmp_path/'device.json').write_text(json.dumps({'webPort':port,'artnet':True,'ntpServer':''}))
     p=subprocess.Popen([ROOT/'build-host/awtrix-tc002','--no-matrix','--data',tmp_path,
-        '--webui',ROOT/'upstream/awtrix-ng/webui/index.html','--port',str(port)],
+        '--webui',webui(),'--port',str(port)],
         stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     def api(path,body=None,method='GET',headers=None):
         data=None if body is None else json.dumps(body).encode()

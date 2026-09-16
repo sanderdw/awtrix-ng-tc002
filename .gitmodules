@@ -1,0 +1,3 @@
+[submodule "upstream/awtrix-ng"]
+	path = upstream/awtrix-ng
+	url = https://github.com/Blueforcer/awtrix-ng.git

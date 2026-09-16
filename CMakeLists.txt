@@ -4,7 +4,18 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 99)
 find_package(Threads REQUIRED)
-set(U ${CMAKE_CURRENT_SOURCE_DIR}/upstream/awtrix-ng)
+# Upstream AWTRIX NG is a pinned submodule that is never edited. The TC002 patch series in
+# patches/ is applied into build-upstream/ by tools/upstream.py, and that is what gets compiled.
+find_program(TC002_PYTHON NAMES python3 python REQUIRED DOC "Python for tools/upstream.py")
+file(GLOB TC002_PATCHES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/patches/*.patch)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${TC002_PATCHES}
+  ${CMAKE_CURRENT_SOURCE_DIR}/.gitmodules ${CMAKE_CURRENT_SOURCE_DIR}/tools/upstream.py)
+execute_process(COMMAND ${TC002_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tools/upstream.py apply
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} RESULT_VARIABLE TC002_UPSTREAM_RESULT)
+if(NOT TC002_UPSTREAM_RESULT EQUAL 0)
+  message(FATAL_ERROR "tools/upstream.py apply failed; see the output above")
+endif()
+set(U ${CMAKE_CURRENT_SOURCE_DIR}/build-upstream)
 file(GLOB_RECURSE CORE CONFIGURE_DEPENDS ${U}/src/core/*.cpp ${U}/src/core/*.c)
 file(GLOB SIM CONFIGURE_DEPENDS ${U}/src/sim/*.cpp)
 file(GLOB BERRY CONFIGURE_DEPENDS ${U}/lib/berry/src/*.c ${U}/lib/berry/default/*.c)
