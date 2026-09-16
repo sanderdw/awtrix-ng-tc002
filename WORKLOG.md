@@ -417,3 +417,22 @@ provide, and reports a full partition as 507 instead of an invalid image.
 Still not exercised on hardware: installation from the web UI with staging on
 `/data`, the knob-hold and three-strikes fallbacks, cold boot, restore. These
 are the docs/VALIDATION.md steps that remain before tagging.
+
+## 2026-09-16: 1.1.1-tc002.1 installed; cold boot strands the clock in AP mode (1.1.1-tc002.2)
+
+Installed 1.1.1-tc002.1 through the web UI (after first flashing a stale
+tc002.5 `dist/update.img` by mistake, which the same path also installed and
+booted). Preflight with the new stock-firmware check passed. Linux reboot over
+ADB: web UI back in about 30 s, `boot-attempts` read 1 during the first minute
+and was gone after it, so both halves of the three-strikes counter work.
+
+Cold boot (unplugged 60 s): the top-left Wi-Fi pixel kept pulsing and the
+`awtrixng-77a8ff` access point appeared. The radio needs longer than 15 s to
+associate after a cold start, the port then opened its access point and never
+retried the saved network. A warm power cycle associated within seconds. Fix:
+the first association gets at least 90 s, the launcher waits up to 45 s for
+the lease, and from access-point mode the saved network is retried every two
+minutes. The updater's log moves to `/data/awtrix-ng/update.log` because
+`/tmp` does not survive the reboot, and the app reports the vendor
+application's fingerprint at start. The web UI's Reboot only restarts the
+AWTRIX process; the validation protocol now says `adb shell reboot`.

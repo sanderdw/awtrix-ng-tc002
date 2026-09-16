@@ -81,6 +81,7 @@
 #include "transport/mqtt/MqttService.h"
 #include "transport/net/ArtnetService.h"
 #include "InheritedProperties.h"
+#include "VendorLibrary.h"
 #include "Tc002Hardware.h"
 #include "Tc002System.h"
 #include <csignal>
@@ -272,6 +273,8 @@ int main(int argc, char** argv) {
 
   DeviceConfig networkConfig=cfg; networkConfig.webPort=port;
   tc002System.begin(networkConfig);
+  // The launcher and the updater use the vendor application; report its fingerprint here too.
+  if(tc002::hardwareEnabled()) tc002::vendorFileTrusted("libulanzi-bootstrap.so","/res/lib/libulanzi-bootstrap.so");
   g_board.begin();
   static ArtnetService artnet;
   if(cfg.artnet) artnet.begin();

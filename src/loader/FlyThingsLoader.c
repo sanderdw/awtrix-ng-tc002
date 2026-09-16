@@ -78,8 +78,9 @@ void onEasyUIInit(void* context) {
         int (*wifiOn)(int)=(int(*)(int))dlsym(bootstrap,"_ZN4base13wifiOnAndWaitEi");
         if(wifiOn) wifiOn(15);
     }
-    /* Leave the framework alive until its initial DHCP transaction finishes. */
-    for(int i=0;i<200;++i) {
+    /* Leave the framework alive until its initial DHCP transaction finishes. A cold-started
+     * radio can take well over 20 s to associate, so allow 45 s before handing over. */
+    for(int i=0;i<450;++i) {
         int fd=socket(AF_INET,SOCK_DGRAM,0);
         struct ifreq req; memset(&req,0,sizeof(req)); strcpy(req.ifr_name,"wlan0");
         int ready=fd>=0 && ioctl(fd,SIOCGIFADDR,&req)==0 &&

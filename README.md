@@ -80,7 +80,7 @@ storage and are limited to one at a time.
 
 ## Current status
 
-The current candidate is **1.1.1-tc002.1** (upstream 1.1.1). It restructures the source tree, hardens the
+The current candidate is **1.1.1-tc002.2** (upstream 1.1.1). It restructures the source tree, hardens the
 HTTP server, adds the launcher fallback and the vendor fingerprint gate, and has not yet been
 installed on a clock; the host test suite and golden screens pass. The previous candidate,
 1.1.0-tc002.7, was installed and verified after a Linux reboot on the test clock on
@@ -340,7 +340,7 @@ If AWTRIX does not come up after an install:
 After installation the normal web UI is at the clock's address on the configured
 port (default 80). System → Maintenance accepts TC002 `.img` updates: the upload streams
 to `/data/awtrix-ng/staging` (flash, not RAM), the helper's preflight must pass before the
-install starts, and the log is at `/tmp/awtrix-update.log`.
+install starts, and the log is at `/data/awtrix-ng/update.log`, which survives the reboot.
 Assets and configuration live in `/data/awtrix-ng` and survive res updates.
 Restoring stock leaves that AWTRIX data directory intact.
 

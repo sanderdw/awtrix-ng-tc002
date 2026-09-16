@@ -22,7 +22,8 @@ stock version with `uv run tools/vendor_fingerprints.py capture CLOCK_IP` and co
    come back with the new version in `/api/v1/version` within three minutes.
 5. `GET /api/v1/tc002/vendor` reports every library `trusted: true`. If any is false, audio or
    Wi-Fi provisioning is deliberately disabled: stop here and capture fingerprints first.
-6. Reboot from the web UI. The clock comes back on its own.
+6. Reboot Linux (`uv run tools/device.py CLOCK_IP shell reboot`; the web UI's Reboot only
+   restarts the AWTRIX process). The clock comes back on its own within a minute.
 
 ## Cold boot
 

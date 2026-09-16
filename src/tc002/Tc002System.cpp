@@ -212,7 +212,11 @@ void System::begin(const awtrix::DeviceConfig& cfg) {
     std::string applied;
     awtrix::sim::readFile(appliedPath,applied);
     bool configured=ssid.empty() || applied==fingerprint,wasConnected=false,initial=true,networkChanged=false;
-    int scanDue=0,ntpDue=0,dhcpDue=0,disconnectedSeconds=0,roamDue=30;
+    int scanDue=0,ntpDue=0,dhcpDue=0,disconnectedSeconds=0,roamDue=30,apRetryDue=0;
+    // A cold-started radio can need well over 15 s to associate; the access point is a
+    // provisioning fallback, not something to strand a configured clock in. Give the first
+    // association at least 90 s, and once in AP mode retry the saved network every two minutes.
+    long apThreshold=std::max<long>(90,cfg.wifiConnectTimeout/1000);
     while(!stop_) {
       Wpa wpa;
       auto status=fields(wpa.command("STATUS"));
@@ -235,9 +239,21 @@ void System::begin(const awtrix::DeviceConfig& cfg) {
       if (connected) dns_.refresh(cfg);
       if(connected) disconnectedSeconds=0;
       else ++disconnectedSeconds;
-      if(!apMode && disconnectedSeconds>std::max<long>(15,cfg.wifiConnectTimeout/1000))
-        apMode=startAp(hostname);
-      if(connected && apMode && apEnable && apManager) { apEnable(apManager,false); apMode=false; }
+      if(!apMode && disconnectedSeconds>apThreshold) {
+        apMode=startAp(hostname); apRetryDue=120;
+        std::fprintf(stderr,"TC002 Wi-Fi: no association after %d s, access point %s\n",
+                     disconnectedSeconds,apMode ? "started" : "unavailable");
+      }
+      if(connected && apMode && apEnable && apManager) {
+        apEnable(apManager,false); apMode=false;
+        std::fprintf(stderr,"TC002 Wi-Fi: associated, access point stopped\n");
+      }
+      if(apMode && --apRetryDue<=0 && apEnable && apManager) {
+        // Drop the access point for 30 s so wpa_supplicant can retry the saved network.
+        apEnable(apManager,false); apMode=false; disconnectedSeconds=0; apThreshold=30;
+        wpa.command("REASSOCIATE");
+        std::fprintf(stderr,"TC002 Wi-Fi: retrying the saved network\n");
+      }
       if(connected && cfg.wifiRoamRssi<0 && --roamDue<=0) {
         if(wifiRssi()<cfg.wifiRoamRssi) wpa.command("SCAN");
         roamDue=30;

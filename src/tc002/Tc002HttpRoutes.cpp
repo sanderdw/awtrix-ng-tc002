@@ -334,7 +334,9 @@ void handleFirmware(SimHttpServer& server, const DeviceConfig& cfg, const httpli
     return;
   }
   const char* helper = "/tmp/awtrix-update-helper";
-  const char* logPath = "/tmp/awtrix-update.log";
+  // On the data partition: /tmp is a RAM disk and the install ends in a reboot.
+  const std::string logFile = sim::dataDir() + "/update.log";
+  const char* logPath = logFile.c_str();
   stdfs::copy_file("/res/bin/tc002-update", helper, stdfs::copy_options::overwrite_existing, ec);
   if (ec || chmod(helper, 0700) != 0) {
     unlink(path.c_str());
@@ -348,7 +350,7 @@ void handleFirmware(SimHttpServer& server, const DeviceConfig& cfg, const httpli
   if (preflight != 0) {
     unlink(path.c_str());
     sendError(res, 422, "preflightFailed",
-              "the update helper refused this image; see /tmp/awtrix-update.log on the clock");
+              "the update helper refused this image; see update.log in the data directory on the clock");
     return;
   }
   if (runHelper(helper, "--install", path.c_str(), logPath, false) != 0) {
