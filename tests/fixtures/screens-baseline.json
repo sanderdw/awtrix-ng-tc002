@@ -8444,10 +8444,9 @@
   }
  },
  "version": {
-  "version": "1.1.1-tc002.1"
+  "version": "1.1.1-tc002.4"
  },
  "device": {
-  "version": "1.1.1-tc002.1",
   "boardType": "tc002",
   "soc": "ssd202d",
   "updateImage": "",

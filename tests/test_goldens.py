@@ -21,7 +21,7 @@ from test_scaling import gif  # noqa: E402
 
 GOLDEN = ROOT / 'tests/fixtures/screens-baseline.json'
 UPDATE = os.environ.get('UPDATE_GOLDENS') == '1'
-VOLATILE = {'uptimeSeconds', 'freeHeapBytes', 'minFreeHeapBytes', 'largestFreeBlockBytes',
+VOLATILE = {'version', 'uptimeSeconds', 'freeHeapBytes', 'minFreeHeapBytes', 'largestFreeBlockBytes',
             'ipAddress', 'uid', 'hostname', 'wifiRssi', 'fps', 'batteryPercent', 'batteryVoltage',
             'batteryPinMillivolts', 'lowBattery', 'wifi', 'mqtt', 'currentApp', 'resetReason',
             'lastRefusal', 'timeSynced', 'time', 'timezone', 'logs'}
