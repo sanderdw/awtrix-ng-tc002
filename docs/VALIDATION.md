@@ -37,11 +37,12 @@ stock version with `uv run tools/vendor_fingerprints.py capture CLOCK_IP` and co
 
 10. Power off. Hold the knob while powering on. The vendor application must start (the stock
     Ulanzi UI). Power-cycle without holding: AWTRIX starts again.
-11. Simulate a broken build: with ADB, `chmod 000 /res/bin/awtrix-tc002` is not possible on the
-    read-only image, so instead confirm the counter path: `cat /data/awtrix-ng/boot-attempts`
-    must not exist after a healthy minute of uptime. Power-cycle three times within the first
-    30 seconds of each boot; the fourth boot must start the vendor application, and the following
-    normal boot must start AWTRIX again.
+11. Simulate a crash loop over ADB: find the `awtrix-tc002` process id and `kill -9` it, wait
+    for init to restart it, and repeat until the launcher's `/data/awtrix-ng/launcher.log`
+    shows "attempt 3 of 3"; the next kill must produce "starting the vendor application" and
+    the stock UI. A normal power cycle must start AWTRIX again. Do not use power cuts for this
+    step: writes made in the first seconds after boot do not survive a power cut on this
+    flash, so pulled plugs are not counted (measured 2026-09-16).
 
 ## Restore
 

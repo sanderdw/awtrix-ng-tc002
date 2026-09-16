@@ -462,3 +462,23 @@ start in a synced `launcher.log` on the data partition and adds a full sync
 after the counter write, so the next run shows what each boot saw. The launcher also records the
 start before loading the vendor library and keeps a synced `launcher.log` on
 the data partition. Retest of the three-strikes step is pending on tc002.4.
+
+## 2026-09-16: three-strikes fallback proven for crash loops; power cuts do not count (1.1.1-tc002.4)
+
+tc002.4 records every launcher start in a synced `/data/awtrix-ng/launcher.log`.
+Three well-timed power cuts (five seconds after the AWTRIX animation) left no
+entry at all, while a marker written a minute into a boot survived a cut, so
+this jffs2 volume does not keep writes made in the first seconds after boot
+across a power cut, and the counter cannot count pulled plugs. Documented as
+such; the knob-hold remains the recovery for power-cut loops.
+
+Crash-loop test over ADB, which is the case the counter exists for: the app was
+killed three times within a minute of each restart; the launcher logged
+attempts 1, 2 and 3, the counter read 3, and on the fourth start it logged
+"AWTRIX did not start healthily three times: starting the vendor application",
+cleared the counter and started the stock UI.
+
+Validation status for 1.1.1-tc002.4: preflight, web-UI install, warm restart
+over ADB, two cold boots, knob-hold fallback and crash-loop fallback all pass
+on stock 1.1.1 / MCU V1.0.17. Not run: restore-stock through the web UI and
+the reinstall after it (steps 8 and 9 of docs/VALIDATION.md).

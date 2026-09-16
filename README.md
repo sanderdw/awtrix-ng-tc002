@@ -63,10 +63,9 @@ provisioning off.
 - **Cold boot is not validated for every release.** A release is a candidate until the
   protocol in [docs/VALIDATION.md](docs/VALIDATION.md) has been run on a real clock; the
   manifest says so.
-- **Recovery without a computer** is the knob-hold at power-on, or three failed starts in a
-  row, both of which start the vendor application instead of AWTRIX. This is implemented in
-  the launcher and unit-tested, but has not yet been exercised on a clock. Recovery over a
-  serial console has never been tried.
+- **Recovery without a computer** is the knob-hold at power-on, or three start-up crashes in
+  a row, both of which start the vendor application instead of AWTRIX. Both were exercised
+  on the test clock on 2026-09-16. Recovery over a serial console has never been tried.
 - **Vendor coupling.** Wi-Fi provisioning, audio and the launcher use Ulanzi's closed
   libraries. A future Ulanzi update can change them; the fingerprint gate then turns those
   features off instead of guessing.
@@ -332,8 +331,10 @@ If AWTRIX does not come up after an install:
 
 - **Hold the knob while powering on.** The launcher starts the vendor application instead;
   its stock UI, updater and ADB are back. Power-cycle without holding to try AWTRIX again.
-- **Three failed starts in a row** (never reaching a minute of uptime) do the same
-  automatically on the fourth boot.
+- **Three crashes in a row** at start-up (the app exiting before a minute of uptime, so
+  that init restarts it) do the same automatically on the fourth start. Pulling the power
+  does not count: on this clock's flash a write made in the first seconds after boot does
+  not survive a power cut, so a boot-loop caused by power cuts still needs the knob.
 - If neither the vendor application nor ADB comes back, recovery needs the stock
   bootloader's update path or a serial connection; this has not been validated.
 
