@@ -400,3 +400,20 @@ Read from the clock over ADB, without changing anything on it:
 The firmware staging check now asks for room for the actual upload (Content-Length
 plus 1 MiB) instead of a fixed 9 MiB, which this 8 MiB data partition could never
 provide, and reports a full partition as 507 instead of an invalid image.
+
+## 2026-09-16: RAM trial of 1.1.1-tc002.1 on the clock
+
+`tools/trial.py` ran the new ARM build from RAM for 75 seconds on the test clock
+(stock app 1.1.1, MCU V1.0.17), then restored the installed 1.1.0-tc002.7:
+
+- `/api/v1/version` reported 1.1.1-tc002.1; 42 FPS; about 12 MiB free RAM.
+- `/api/v1/tc002/vendor`: `libmi_ao.so` checked and trusted; the buzzer
+  capability was on and a test tone played. `libzknet.so` was not exercised
+  because the trial inherits the launcher's DHCP lease, and the vendor
+  application is only used by the launcher, which a RAM trial bypasses.
+- Wi-Fi connected, matrix reported as 52 × 16 fixed.
+- A POST with a 9 MB Content-Length was refused with 413 before any body was read.
+
+Still not exercised on hardware: installation from the web UI with staging on
+`/data`, the knob-hold and three-strikes fallbacks, cold boot, restore. These
+are the docs/VALIDATION.md steps that remain before tagging.
