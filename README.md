@@ -17,6 +17,13 @@ Explore the [original project](https://github.com/Blueforcer/awtrix-ng), read th
 Blueforcer a star if you enjoy this port. This is an independent, unofficial TC002
 adaptation, maintained here; it is not an official Blueforcer or Ulanzi release.
 
+The web UI keeps the upstream **Ko-fi** button, and its documentation button and icon
+editor load from Blueforcer's hosting. If this port is useful to you, please
+[support the upstream author](https://ko-fi.com/blueforcer): the work you are using
+is his. AWTRIX NG is licensed under the
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0);
+this port carries its Required Notice and the same licence.
+
 ![TC002](docs/tc002.jpg)
 
 ## MQTT compatibility

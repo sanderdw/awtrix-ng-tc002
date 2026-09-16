@@ -337,3 +337,14 @@ then the clock rebooted and started version 1.1.0-tc002.7 automatically.
 Only the application binary changed in the firmware filesystem.
 Backups and installation evidence are in
 `device-private/pre-volume-shift-20260915/`; artifacts are in `dist/volume-shift/`.
+
+## 2026-09-16: upstream credit restored (1.1.0-tc002.8)
+
+Upstream review feedback pointed out that the web UI's Ko-fi button had been
+replaced by a link to this repository while the documentation button and the icon
+editor still load from the upstream author's hosting. That was wrong. The Ko-fi
+button, icon and click handler are restored verbatim from upstream, ahead of the
+repository link, and a footer carries the PolyForm Required Notice, the licence
+and a pointer to support upstream. `tests/test_webui_static.py` fails if either
+disappears again. No firmware behaviour changed; the version is bumped so the
+shipped UI is distinguishable from tc002.7.

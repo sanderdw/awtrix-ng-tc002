@@ -75,6 +75,9 @@ flash and reboots; it needs a backup and a recovery plan. Build that image local
 from your own clock's original stock `/res` backup and a valid stock TC002 update
 container, following the project's README. Keep those personal files private.
 
+The web UI's documentation button and icon editor load from the upstream
+author's hosting. Please support AWTRIX NG at https://ko-fi.com/blueforcer.
+
 Source and installation documentation:
 https://github.com/sanderdw/awtrix-ng-tc002
 
