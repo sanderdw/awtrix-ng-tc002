@@ -22,6 +22,16 @@ execute_process(COMMAND ${TC002_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tools/webui_
 if(NOT TC002_WEBUI_RESULT EQUAL 0)
   message(FATAL_ERROR "tools/webui_brand.py failed; see the output above")
 endif()
+# Hashes of the vendor files the port calls into, compiled in from src/tc002/vendor-fingerprints.json.
+set(TC002_GENERATED ${CMAKE_BINARY_DIR}/generated)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tc002/vendor-fingerprints.json ${CMAKE_CURRENT_SOURCE_DIR}/tools/vendor_fingerprints.py)
+execute_process(COMMAND ${TC002_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tools/vendor_fingerprints.py generate
+  --output ${TC002_GENERATED}/VendorFingerprints.h
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} RESULT_VARIABLE TC002_FINGERPRINT_RESULT)
+if(NOT TC002_FINGERPRINT_RESULT EQUAL 0)
+  message(FATAL_ERROR "tools/vendor_fingerprints.py failed; see the output above")
+endif()
 # The clock's panel geometry, applied through the build-time knobs the patch series adds upstream.
 set(TC002_PANEL AWTRIX_MATRIX_HEIGHT=16 AWTRIX_PANEL_WIDTH=52 AWTRIX_GIF_MAX_W=52 AWTRIX_GIF_MAX_H=16
   AWTRIX_SCRIPT_ICON_W=52 AWTRIX_SCRIPT_ICON_H=16)
@@ -41,9 +51,10 @@ add_executable(awtrix-tc002 ${CORE} ${SIM} ${TC002}
   ${U}/src/transport/mqtt/MqttLink.cpp ${U}/src/transport/mqtt/HaAnnouncer.cpp
   ${U}/src/transport/net/ArtnetService.cpp ${U}/src/transport/net/UdpSocket.cpp
   vendor/PubSubClient/src/PubSubClient.cpp src/updater/FirmwareImage.cpp)
-add_executable(tc002-update src/updater/FirmwareUpdate.cpp src/updater/FirmwareImage.cpp)
+add_executable(tc002-update src/updater/FirmwareUpdate.cpp src/updater/FirmwareImage.cpp src/tc002/VendorLibrary.cpp)
+target_include_directories(tc002-update PRIVATE src/tc002 ${TC002_GENERATED})
 # src/tc002/compat comes before upstream's sim/compat so the clock's WiFi and socket shims win.
-target_include_directories(awtrix-tc002 PRIVATE src/tc002 src/tc002/compat src/updater src/loader
+target_include_directories(awtrix-tc002 PRIVATE src/tc002 src/tc002/compat src/updater src/loader ${TC002_GENERATED}
   ${U}/src ${U}/src/sim/compat vendor/base64/src vendor/PubSubClient/src)
 target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL}
   AWTRIX_NG_VERSION="1.1.0-tc002.8" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
@@ -74,13 +85,14 @@ install(TARGETS awtrix-tc002 RUNTIME DESTINATION bin)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/build-webui/index.html DESTINATION share/awtrix-tc002)
 if(CMAKE_CROSSCOMPILING)
   add_library(tc002-loader SHARED src/loader/FlyThingsLoader.c)
+  target_include_directories(tc002-loader PRIVATE src/loader src/tc002)
   target_link_libraries(tc002-loader PRIVATE ${CMAKE_DL_LIBS})
   set_target_properties(tc002-loader PROPERTIES OUTPUT_NAME zkgui)
 endif()
 include(CTest)
 if(BUILD_TESTING)
   add_executable(test-loader tests/loader_test.c)
-  target_include_directories(test-loader PRIVATE src/loader)
+  target_include_directories(test-loader PRIVATE src/loader src/tc002)
   add_test(NAME tc002-loader COMMAND test-loader)
   add_executable(test-dns tests/dns_test.cpp src/tc002/Tc002Dns.cpp)
   target_include_directories(test-dns PRIVATE src/tc002 ${U}/src ${U}/src/sim/compat)

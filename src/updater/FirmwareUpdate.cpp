@@ -1,6 +1,8 @@
 // This helper runs from /tmp and links only libraries on the root filesystem.
 // It never erases a block until the complete image and live partition match.
 #include "FirmwareImage.h"
+#include "VendorFingerprints.h"
+#include "VendorLibrary.h"
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -47,9 +49,27 @@ static void stopBluetoothHelper() {
   }
   closedir(proc);
 }
+// The port was verified against one stock firmware. Refuse to replace anything else unless the
+// operator says --force: the vendor files AWTRIX keeps calling into would be unknown builds.
+static bool stockFirmwareRecognised() {
+  bool ok=true;
+  for(const tc002::VendorFingerprint* f=tc002::kVendorFingerprints;f->library;++f) {
+    if(tc002::vendorFileTrusted(f->library,f->path)) continue;
+    // Several hashes may be recorded for one library; any match above already returned.
+    bool matched=false;
+    for(const tc002::VendorFingerprint* g=tc002::kVendorFingerprints;g->library;++g)
+      if(!std::strcmp(g->library,f->library) && g!=f && tc002::vendorFileTrusted(g->library,g->path)) matched=true;
+    if(matched) continue;
+    std::fprintf(stderr,"Stock firmware check: %s at %s is not a build this port was verified against (expected stock app %s, MCU %s)\n",
+                 f->library,f->path,tc002::kStockApp,tc002::kStockMcu);
+    ok=false;
+  }
+  return ok;
+}
 int main(int argc,char** argv) {
-  if(argc!=3 || (std::strcmp(argv[1],"--validate") && std::strcmp(argv[1],"--preflight") && std::strcmp(argv[1],"--install"))) {
-    std::fprintf(stderr,"Usage: tc002-update --validate|--preflight|--install update.img\n"); return 2;
+  const bool force=argc==4 && !std::strcmp(argv[3],"--force");
+  if((argc!=3 && !force) || (std::strcmp(argv[1],"--validate") && std::strcmp(argv[1],"--preflight") && std::strcmp(argv[1],"--install"))) {
+    std::fprintf(stderr,"Usage: tc002-update --validate|--preflight|--install update.img [--force]\n"); return 2;
   }
   int imageFd=open(argv[2],O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
   tc002::FirmwareImage image; std::string error;
@@ -87,6 +107,10 @@ int main(int argc,char** argv) {
     close(flash); close(imageFd); return 1;
   }
   close(mountNamespace);
+  if(!stockFirmwareRecognised()) {
+    if(!force) { std::fprintf(stderr,"Refusing to install on an unverified stock firmware; nothing erased (add --force to override)\n"); close(flash); close(imageFd); return 1; }
+    std::fprintf(stderr,"Continuing on an unverified stock firmware because of --force\n");
+  }
   if(!std::strcmp(argv[1],"--preflight")) {
     std::puts("Preflight passed: valid image, matching 8 MiB NOR res partition; nothing written");
     close(flash); close(imageFd); return 0;

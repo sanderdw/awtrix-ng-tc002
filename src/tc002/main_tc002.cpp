@@ -92,6 +92,8 @@ static uint64_t tc002SleepMs = 0;
 static bool tc002Reset = false;
 static bool tc002FactoryReset = false;
 static tc002::System tc002System;
+// The launcher counts starts in this file; a minute of uptime is what makes a start count as healthy.
+static const int64_t kHealthyUptimeMs = 60000;
 
 using namespace awtrix;
 namespace stdfs = std::filesystem;
@@ -549,6 +551,14 @@ int main(int argc, char** argv) {
       return 0;
     }
     const int64_t now = monotonicMs();
+    {
+      static bool bootAcknowledged = false;
+      if (!bootAcknowledged && now >= kHealthyUptimeMs) {
+        bootAcknowledged = true;
+        std::error_code ec;
+        stdfs::remove(stdfs::u8path(sim::dataDir() + "/boot-attempts"), ec);
+      }
+    }
     g_board.setNow(now);
     {
       static uint16_t frames = 0;

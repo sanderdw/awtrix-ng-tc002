@@ -1,4 +1,5 @@
 #include "Tc002Hardware.h"
+#include "InputDevices.h"
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -127,11 +128,9 @@ void Hardware::begin() {
      ioctl(spi_,SPI_IOC_WR_LSB_FIRST,&lsb)<0 || ioctl(spi_,SPI_IOC_WR_MAX_SPEED_HZ,&speed)<0 ||
      ioctl(spi_,SPI_IOC_RD_MAX_SPEED_HZ,&speed)<0 || mode!=0 || bits!=8 || speed!=10000000)
     throw std::runtime_error("TC002 SPI configuration failed");
-  for(int i=0;i<2;++i) {
-    auto path=std::string("/dev/input/event")+std::to_string(67+i);
-    inputs_[i]=open(path.c_str(),O_RDONLY|O_NONBLOCK|O_CLOEXEC);
-    if(inputs_[i]<0) throw std::runtime_error("TC002 input unavailable: "+path);
-  }
+  // Buttons and the rotary encoder are found by capability; the tested nodes are tried first.
+  if(tc002OpenInputDevices(inputs_,2,O_RDONLY|O_NONBLOCK|O_CLOEXEC)<1)
+    throw std::runtime_error("TC002 input devices not found under /dev/input");
 }
 void Hardware::show(const uint32_t* pixels, bool mirror, bool rotate) {
   if(!enabled) return;

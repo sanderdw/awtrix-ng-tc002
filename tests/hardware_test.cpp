@@ -1,4 +1,5 @@
 #include "Tc002Hardware.h"
+#include "InputDevices.h"
 #include <cstdio>
 #include <cstdlib>
 void check(bool b) { if(!b) std::abort(); }
@@ -24,5 +25,21 @@ int main() {
   packet.back()^=1; stream=packet;
   stream.insert(stream.end(),query.begin(),query.end());
   check(tc002::parseMcuPacket(stream,command,data) && command==0x11);
-  std::puts("TC002 frame geometry, RGB, padding and orientation passed");
+  {
+    unsigned char ev[TC002_INPUT_BITS(EV_MAX+1)]{},key[TC002_INPUT_BITS(KEY_MAX+1)]{},abs[TC002_INPUT_BITS(ABS_MAX+1)]{};
+    auto set=[](unsigned char* bits,unsigned bit) { bits[bit/8]|=1<<(bit%8); };
+    check(tc002ClassifyInput(ev,key,abs)==0);
+    set(ev,EV_KEY); set(key,KEY_LEFT); set(key,KEY_RIGHT);
+    check(tc002ClassifyInput(ev,key,abs)==1);
+    set(key,BTN_TOUCH);
+    check(tc002ClassifyInput(ev,key,abs)==0);                 // a touch panel is never a button device
+    unsigned char ev2[TC002_INPUT_BITS(EV_MAX+1)]{},key2[TC002_INPUT_BITS(KEY_MAX+1)]{},abs2[TC002_INPUT_BITS(ABS_MAX+1)]{};
+    set(ev2,EV_ABS);
+    check(tc002ClassifyInput(ev2,key2,abs2)==2);              // the rotary encoder reports EV_ABS
+    set(abs2,ABS_MT_POSITION_X);
+    check(tc002ClassifyInput(ev2,key2,abs2)==0);              // multitouch is not the encoder
+    int fds[2]; check(tc002OpenInputDevices(fds,2,O_RDONLY|O_NONBLOCK|O_CLOEXEC)>=0);
+    check(tc002SelectHeld(fds,0)==0);
+  }
+  std::puts("TC002 frame geometry, RGB, padding, orientation and input classification passed");
 }

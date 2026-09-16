@@ -74,3 +74,11 @@ def test_native_updater_validates_same_container(tmp_path, offset):
     path.write_bytes(blob)
     result = subprocess.run([updater, "--validate", path], capture_output=True)
     assert (result.returncode == 0) == (offset is None), result.stderr
+
+
+def test_manifest_version_comes_from_cmake_and_status_from_validation():
+    import re
+    cmake = (Path(__file__).parents[1] / "CMakeLists.txt").read_text()
+    assert image.firmware_version() == re.search(r'AWTRIX_NG_VERSION="([^"]+)"', cmake)[1]
+    assert image.manifest_status(None) == "release-candidate; not cold-boot validated"
+    assert image.manifest_status("2026-09-20").startswith("cold-boot validated on 2026-09-20")

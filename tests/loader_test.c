@@ -1,3 +1,4 @@
+#include "BootGuard.h"
 #include "InheritedProperties.h"
 #include <unistd.h>
 #include <string.h>
@@ -13,6 +14,24 @@ int main(int argc, char** argv) {
         CHECK(fcntl(hardware, F_GETFD) == -1 && errno == EBADF);
         puts("Property workspace survives exec; hardware descriptor closes");
         return 0;
+    }
+    {
+        char counter[] = "/tmp/tc002-boot-attempts-XXXXXX";
+        int fd = mkstemp(counter);
+        CHECK(fd >= 0); close(fd); unlink(counter);
+        CHECK(tc002ReadBootAttempts(counter) == 0);
+        CHECK(!tc002ShouldFallBack(tc002RecordBootAttempt(counter)));   /* 1 */
+        CHECK(!tc002ShouldFallBack(tc002RecordBootAttempt(counter)));   /* 2 */
+        CHECK(!tc002ShouldFallBack(tc002RecordBootAttempt(counter)));   /* 3 */
+        CHECK(tc002ReadBootAttempts(counter) == 3);
+        CHECK(tc002ShouldFallBack(tc002RecordBootAttempt(counter)));    /* 4: vendor application */
+        tc002ClearBootAttempts(counter);
+        CHECK(tc002ReadBootAttempts(counter) == 0);
+        FILE* junk = fopen(counter, "w"); fputs("garbage\n", junk); fclose(junk);
+        CHECK(tc002ReadBootAttempts(counter) == 0);
+        unlink(counter);
+        CHECK(tc002ReadBootAttempts("/nonexistent/dir/boot-attempts") == 0);
+        CHECK(tc002RecordBootAttempt("/nonexistent/dir/boot-attempts") == 1);
     }
     unsetenv("ANDROID_PROPERTY_WORKSPACE");
     CHECK(tc002PropertyWorkspaceFd() == -1);

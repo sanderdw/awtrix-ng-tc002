@@ -1,0 +1,21 @@
+{
+  "_comment": "SHA-256 of the Ulanzi firmware files this port calls into. Only files with a recorded hash are trusted at runtime and by the updater; run `uv run tools/vendor_fingerprints.py capture CLOCK_IP` on a supported clock to fill in the rootfs libraries, then rebuild.",
+  "stock": {"app": "1.1.1", "mcu": "V1.0.17"},
+  "libraries": {
+    "libulanzi-bootstrap.so": {
+      "path": "/res/lib/libulanzi-bootstrap.so",
+      "purpose": "the vendor application; the launcher calls its Wi-Fi initialisation and falls back to it",
+      "sha256": ["64d7dc6f7c06cc4f00164b28a52e73cf0b24678a2f3360e22b4ef757818bb7e1"]
+    },
+    "libmi_ao.so": {
+      "path": null,
+      "purpose": "Sigmastar audio output; the port passes hand-measured structures to it and must not run against another build",
+      "sha256": []
+    },
+    "libzknet.so": {
+      "path": null,
+      "purpose": "vendor network library; DHCP, static addressing and the fallback access point go through its C++ symbols",
+      "sha256": []
+    }
+  }
+}

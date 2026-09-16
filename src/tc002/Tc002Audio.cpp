@@ -1,5 +1,6 @@
 #include "Tc002Audio.h"
 #include "Tc002Hardware.h"
+#include "VendorLibrary.h"
 #include "core/audio/Mp3FileDecoder.h"
 #include "core/radio/IcyStream.h"
 #include "core/radio/IcyMetadata.h"
@@ -30,8 +31,9 @@ void Audio::begin() {
     if(!dlopen(name,RTLD_LAZY|RTLD_GLOBAL)) {
       std::fprintf(stderr,"TC002 audio dependency: %s\n",dlerror()); return;
     }
-  library_=dlopen("libmi_ao.so",RTLD_NOW|RTLD_LOCAL);
-  if(!library_) { std::fprintf(stderr,"TC002 audio: %s\n",dlerror()); return; }
+  // Only the exact driver build the structure layouts below were measured against is used.
+  library_=openTrustedVendorLibrary("libmi_ao.so",RTLD_NOW|RTLD_LOCAL);
+  if(!library_) return;
 #define LOAD(member,name) member=reinterpret_cast<decltype(member)>(dlsym(library_,name))
   LOAD(setAttr_,"MI_AO_SetPubAttr"); LOAD(enable_,"MI_AO_Enable");
   LOAD(enableChannel_,"MI_AO_EnableChn"); LOAD(disable_,"MI_AO_Disable");

@@ -181,3 +181,11 @@ def test_a_second_large_upload_is_refused_while_one_is_in_flight(app):
         slow.sendall(body[2000:])
         assert int(slow.recv(4096).split(b' ')[1]) == 200
     assert {f['name'] for f in app('/api/v1/audio/mp3')['files']} == {'slow.mp3'}
+
+
+def test_vendor_status_lists_the_files_the_port_depends_on(app):
+    status = app('/api/v1/tc002/vendor')
+    assert status['stock'] == {'app': '1.1.1', 'mcu': 'V1.0.17'}
+    assert set(status['libraries']) >= {'libulanzi-bootstrap.so', 'libmi_ao.so', 'libzknet.so'}
+    # Without hardware nothing is loaded, so nothing can be trusted.
+    assert not any(lib['trusted'] for lib in status['libraries'].values())

@@ -5,6 +5,7 @@ Layout reference: qzz0518/ulanzi-tc002-market-clock's ZKSWE format research.
 All parsing, bounds checks and packaging here are implemented independently.
 """
 import argparse
+import re
 import hashlib
 import json
 from pathlib import Path
@@ -16,6 +17,19 @@ import zlib
 
 MAX_RES = 0x800000
 HEADER_SIZE = 572
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def firmware_version():
+    """The one version string, from CMakeLists.txt; the manifest must never drift from the binary."""
+    return re.search(r'AWTRIX_NG_VERSION="([^"]+)"', (ROOT / "CMakeLists.txt").read_text())[1]
+
+
+def manifest_status(validated):
+    """A release only stops being a candidate once the cold-boot protocol in docs/VALIDATION.md ran."""
+    if validated:
+        return f"cold-boot validated on {validated} per docs/VALIDATION.md"
+    return "release-candidate; not cold-boot validated"
 
 
 def unpack(blob):
@@ -67,6 +81,8 @@ def main():
     p.add_argument("--live-res", type=Path, required=True)
     p.add_argument("--build", type=Path, default=Path("build-tc002"))
     p.add_argument("--output", type=Path, default=Path("dist"))
+    p.add_argument("--validated", metavar="YYYY-MM-DD",
+                   help="date the cold-boot validation protocol was completed on this exact build")
     a = p.parse_args()
     stock, live = a.stock.read_bytes(), a.live_res.read_bytes()
     unpack(stock)
@@ -111,9 +127,9 @@ def main():
         manifest[name] = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "partition": "res"}
     manifest["upstreamCommit"] = "4ff1de83428ed13cae6e210dfcbf9d186a09bc60"
     manifest["matrix"] = {"width": 52, "height": 16}
-    manifest["version"] = "1.1.0-tc002.8"
+    manifest["version"] = firmware_version()
     manifest["tls"] = "OpenSSL 3.5.8"
-    manifest["status"] = "release-candidate; not cold-boot validated"
+    manifest["status"] = manifest_status(a.validated)
     for name in ("awtrix-tc002", "libzkgui.so", "tc002-update"):
         data = (a.build/name).read_bytes()
         manifest["bin/"+name] = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}

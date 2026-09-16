@@ -16,6 +16,7 @@
 #include "Tc002Board.h"
 #include "Tc002Hardware.h"
 #include "Tc002System.h"
+#include "VendorLibrary.h"
 #include "core/AssetPaths.h"
 #include "core/ProvisioningPolicy.h"
 #include "core/api/ApiRouter.h"
@@ -124,6 +125,14 @@ bool preRoute(const httplib::Request& req, httplib::Response& res, Tc002Board& b
   }
   if (path == "/update") {
     sendError(res, 405, "methodNotAllowed", "use multipart POST");
+    return true;
+  }
+  if (path == "/api/v1/tc002/vendor") {
+    if (method != "GET") {
+      sendError(res, 405, "methodNotAllowed", "allowed method(s): GET");
+      return true;
+    }
+    sendJson(res, 200, tc002::vendorStatusJson());
     return true;
   }
   return false;

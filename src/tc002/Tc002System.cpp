@@ -1,6 +1,7 @@
 #include "Tc002System.h"
 #include "Tc002Hardware.h"
 #include "Tc002Mdns.h"
+#include "VendorLibrary.h"
 #include "persistence/DeviceConfig.h"
 #include "core/net/HostName.h"
 #include "system/Log.h"
@@ -118,7 +119,8 @@ void* networkLibrary() {
     for(auto name:{"libz.so.1","libpng12.so.0","libjpeg.so.9","libfreetype.so.6",
                   "liblog.so","libcutils.so","libnanovg.so","libmi_sys.so","libmi_gfx.so","libeasyui.so"})
       if(!dlopen(name,RTLD_LAZY|RTLD_GLOBAL)) return nullptr;
-    net=dlopen("libzknet.so",RTLD_LAZY|RTLD_GLOBAL);
+    // The mangled symbols and object layout below belong to one exact build of this library.
+    net=openTrustedVendorLibrary("libzknet.so",RTLD_LAZY|RTLD_GLOBAL);
   }
   return net;
 }
