@@ -10,10 +10,10 @@ AWTRIX_PANEL_WIDTH and AWTRIX_GIF_MAX_W/H at build time. The defaults are the
 the GIF limit instead of being a fixed 1024 slots.
 
 diff --git a/src/core/render/MatrixLayout.h b/src/core/render/MatrixLayout.h
-index 415a80f..ae6d17a 100644
+index ac81d44..2458207 100644
 --- a/src/core/render/MatrixLayout.h
 +++ b/src/core/render/MatrixLayout.h
-@@ -7,7 +7,14 @@
+@@ -8,7 +8,14 @@
  
  namespace awtrix {
  
@@ -29,7 +29,7 @@ index 415a80f..ae6d17a 100644
  inline constexpr int kMatrixWidthMin = 32;
  inline constexpr int kMatrixWidthMax = 128;
  
-@@ -36,7 +43,7 @@ inline std::string enumNameChoices(const char* const* names, int count) {
+@@ -37,7 +44,7 @@ inline std::string enumNameChoices(const char* const* names, int count) {
  }
  
  struct MatrixLayout {
@@ -38,25 +38,11 @@ index 415a80f..ae6d17a 100644
    int panels = 1;
    PanelStart panelStart = PanelStart::TopLeft;
    Wiring panelWiring = Wiring::Rows;
-diff --git a/src/media/MicroGif.cpp b/src/media/MicroGif.cpp
-index e565fbc..c2aebca 100644
---- a/src/media/MicroGif.cpp
-+++ b/src/media/MicroGif.cpp
-@@ -10,7 +10,8 @@ namespace media {
- 
- namespace {
- 
--constexpr int kLzwSlots = 1024;
-+// Sized for the panel: the stock 32 by 8 needs 516 slots, a 52 by 16 panel 1092.
-+constexpr int kLzwSlots = MicroGif::kMaxW * MicroGif::kMaxH + 258 + 2 <= 1024 ? 1024 : 4096;
- static_assert(MicroGif::kMaxW * MicroGif::kMaxH + 258 + 2 <= kLzwSlots,
-               "LZW scratch is sized for the panel; grow kLzwSlots with it");
- 
 diff --git a/src/media/MicroGif.h b/src/media/MicroGif.h
-index f76bf15..1dbc3f7 100644
+index f4c79e0..a9a37e0 100644
 --- a/src/media/MicroGif.h
 +++ b/src/media/MicroGif.h
-@@ -12,8 +12,14 @@ namespace media {
+@@ -13,8 +13,14 @@ namespace media {
  // time, and everything larger than kMaxW x kMaxH is clipped or rejected.
  class MicroGif {
   public:
@@ -71,10 +57,10 @@ index f76bf15..1dbc3f7 100644
 +  static constexpr int kMaxW = AWTRIX_GIF_MAX_W;
 +  static constexpr int kMaxH = AWTRIX_GIF_MAX_H;
  
+   // The input, including its palettes, must stay alive until the last frame is decoded.
    bool begin(const uint8_t* data, std::size_t len);
- 
 diff --git a/src/persistence/DeviceConfig.h b/src/persistence/DeviceConfig.h
-index 21b751c..c0793dd 100644
+index 7c2ea74..4a23a1a 100644
 --- a/src/persistence/DeviceConfig.h
 +++ b/src/persistence/DeviceConfig.h
 @@ -43,7 +43,7 @@ struct DeviceConfig {

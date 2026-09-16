@@ -1,6 +1,6 @@
 # AWTRIX NG TC002
 
-An unofficial, community-maintained native Linux/ARMv7 port of **AWTRIX NG 1.1.0** for
+An unofficial, community-maintained native Linux/ARMv7 port of **AWTRIX NG 1.1.1** for
 the Ulanzi TC002's **52 × 16** pixel matrix. It runs the upstream core, renderer, Berry
 scripting, HTTP API, MQTT dispatcher and web UI directly on the clock.
 
@@ -80,7 +80,7 @@ storage and are limited to one at a time.
 
 ## Current status
 
-The current candidate is **1.1.0-tc002.9**. It restructures the source tree, hardens the
+The current candidate is **1.1.1-tc002.1** (upstream 1.1.1). It restructures the source tree, hardens the
 HTTP server, adds the launcher fallback and the vendor fingerprint gate, and has not yet been
 installed on a clock; the host test suite and golden screens pass. The previous candidate,
 1.1.0-tc002.7, was installed and verified after a Linux reboot on the test clock on

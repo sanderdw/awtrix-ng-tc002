@@ -33,7 +33,7 @@ inline std::string tc002CapabilitiesJson(const std::vector<std::string>& effects
          ",\"audio\":{\"buzzer\":" +
          flag(audio.buzzer) + ",\"track\":" + flag(audio.track) + ",\"mp3\":" + flag(audio.mp3) +
          ",\"radio\":" + flag(audio.radio) + "}" +
-         ",\"matrix\":{\"width\":52,\"height\":16,\"fixed\":true}"
+         ",\"scriptUpdates\":true,\"matrix\":{\"width\":52,\"height\":16,\"fixed\":true}"
          ",\"gpio\":{\"soc\":\"ssd202d\",\"fixed\":true,\"input\":[],\"output\":[],\"adc\":[],\"rtc\":[]}}";
 }
 

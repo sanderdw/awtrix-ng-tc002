@@ -78,8 +78,8 @@ void Tc002Periphery::tick(int64_t nowMs) {
   // Rotating the panel by 180 degrees physically swaps left and right, so the user's swap setting
   // has to XOR with it rather than simply override it.
   const bool swapped = cfg_->rotate != cfg_->swapButtons;
-  // Scripts get first refusal on every press; returning true suppresses the built-in navigation.
-  bool consumed = false;
+  // Scripts get first refusal on every press, button by button; returning true suppresses the
+  // built-in action for that button alone.
   // The physical -/+ rocker is reserved for volume/brightness. Delay its short
   // action until release so a brightness hold never also changes the volume.
   const bool held[2] = {cur.left, cur.right};
@@ -105,18 +105,17 @@ void Tc002Periphery::tick(int64_t nowMs) {
     if (!handled && !blocked)
       engine_->submit(Command(next ? CommandType::NextApp : CommandType::PreviousApp));
   }
-  if (sEdge && buttonHook_) consumed = buttonHook_(1);
-  if (!consumed) {
-    // One press dismisses the current notification, two inside kDoublePressMs toggle the panel.
-    if (sEdge) {
-      engine_->submit(Command(CommandType::DismissNotify));
-      if (!blocked && nowMs - lastSelectEdgeMs_ <= kDoublePressMs) {
-        Command c(CommandType::SetDisplay);
-        c.payload = engine_->state().runtime().matrixOff ? "{\"power\":true}" : "{\"power\":false}";
-        engine_->submit(c);
-      }
-      lastSelectEdgeMs_ = nowMs;
+  const bool tookSelect = sEdge && buttonHook_ && buttonHook_(1);
+  // One press dismisses the current notification, two inside kDoublePressMs toggle the panel. A
+  // consumed press is not remembered, so it can never pair up with the next one.
+  if (sEdge && !tookSelect) {
+    engine_->submit(Command(CommandType::DismissNotify));
+    if (!blocked && nowMs - lastSelectEdgeMs_ <= kDoublePressMs) {
+      Command c(CommandType::SetDisplay);
+      c.payload = engine_->state().runtime().matrixOff ? "{\"power\":true}" : "{\"power\":false}";
+      engine_->submit(c);
     }
+    lastSelectEdgeMs_ = nowMs;
   }
   if (cur.left != prev_.left || cur.select != prev_.select || cur.right != prev_.right) {
     engine_->state().runtime().buttons = {cur.left, cur.select, cur.right};

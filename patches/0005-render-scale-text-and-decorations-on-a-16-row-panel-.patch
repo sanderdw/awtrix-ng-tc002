@@ -97,7 +97,7 @@ index 0000000..be50fcd
 +
 +}
 diff --git a/src/core/render/Gfx2d.cpp b/src/core/render/Gfx2d.cpp
-index 06c40ae..4e0ad8c 100644
+index 9c1e65b..8ec3c29 100644
 --- a/src/core/render/Gfx2d.cpp
 +++ b/src/core/render/Gfx2d.cpp
 @@ -1,3 +1,4 @@
@@ -105,7 +105,7 @@ index 06c40ae..4e0ad8c 100644
  #include "core/render/Gfx2d.h"
  
  #include <algorithm>
-@@ -45,27 +46,48 @@ void drawProgress(Canvas& c, int pct, const ColorSource& fill, uint32_t track, i
+@@ -47,29 +48,49 @@ void drawProgress(Canvas& c, int pct, const ColorSource& fill, uint32_t track, i
    const int filled = (prog * w) / 100;
    const float span = static_cast<float>(w > 1 ? w - 1 : 1);
    for (int x = 0; x < w; ++x)
@@ -118,9 +118,12 @@ index 06c40ae..4e0ad8c 100644
                int x0) {
 -  const int n = static_cast<int>(chartCount(values));
 -  if (n == 0) return;
--  const ChartRange range = chartRange(values, n, autoscale);
 +  const int count = static_cast<int>(chartCount(values));
++  if (count == 0) return;
+   x0 = std::max(x0, 0);
    const int avail = c.width() - x0;
+   if (avail <= 0) return;
+-  const ChartRange range = chartRange(values, n, autoscale);
 -  const int barW = std::max(1, (avail - (n - 1)) / n);
 -  const auto level = [&](int v) {
 +  const int scale = displayTextScale(c.height());
@@ -132,7 +135,6 @@ index 06c40ae..4e0ad8c 100644
 -  const int zero = level(0);
 +  if (scale == 1) {
 +    const int n = count;
-+    if (n == 0) return;
 +    const ChartRange range = chartRange(values, n, autoscale);
 +    const int barW = std::max(1, (avail - (n - 1)) / n);
 +    // Bars grow away from wherever zero lands, so negative values hang below the baseline.
@@ -148,7 +150,6 @@ index 06c40ae..4e0ad8c 100644
 +  // On a scaled panel bars share the width proportionally, with a scaled gap, and a series wider
 +  // than the panel is resampled so its last value always stays visible.
 +  const int n = std::min(count, avail);
-+  if (n <= 0) return;
 +  const ChartRange range = chartRange(values, count, autoscale);
 +  const int zero = level(range, 0);
    for (int i = 0; i < n; ++i) {
@@ -165,7 +166,7 @@ index 06c40ae..4e0ad8c 100644
  }
  
 diff --git a/src/core/render/RenderPipeline.cpp b/src/core/render/RenderPipeline.cpp
-index d998fdc..9c65d81 100644
+index 624178a..1be4e1a 100644
 --- a/src/core/render/RenderPipeline.cpp
 +++ b/src/core/render/RenderPipeline.cpp
 @@ -7,6 +7,7 @@
@@ -194,7 +195,7 @@ index d998fdc..9c65d81 100644
    slotA_.icon = d_.icons;
    slotB_.icon = d_.iconsB;
  }
-@@ -50,9 +51,13 @@ bool RenderPipeline::iconIsFullScreen(const PageSlot* slot, int canvasWidth) con
+@@ -51,9 +52,13 @@ bool RenderPipeline::iconIsFullScreen(const PageSlot* slot, int canvasWidth) con
    return slot && slot->valid && slot->icon && slot->icon->width() >= canvasWidth;
  }
  
@@ -210,7 +211,7 @@ index d998fdc..9c65d81 100644
    if (spec.iconMode == IconMode::Fixed || spec.icon.empty()) return 0;
    if (slot.iconPushed && spec.iconMode == IconMode::PushOnce) return -kIconWidth;
    const float tx = slot.scroll.x();
-@@ -80,7 +85,8 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+@@ -81,7 +86,8 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
      const bool fullScreen = iconIsFullScreen(slot, dst.width());
      render::SpecRender r;
      r.defaultTextColor = s.textColor;
@@ -220,7 +221,7 @@ index d998fdc..9c65d81 100644
      r.backgroundDrawn = fullScreen;
      r.nowMs = nowMs;
      r.textX = slot ? slot->scroll.x() : 0.0f;
-@@ -92,7 +98,10 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+@@ -93,7 +99,10 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
      es.hasSpeed = spec.extras().hasEffectSpeed;
      es.ramp = spec.extras().palette;
      if (r.effect) r.effect->setSettings(es);
@@ -232,7 +233,7 @@ index d998fdc..9c65d81 100644
      render::renderSpec(dst, spec, fontFor(&spec), r);
      if (r.iconWidth && slot && slot->valid)
        slot->icon->blit(dst, spec.iconOffsetX + iconShift(spec, *slot));
-@@ -108,7 +117,7 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+@@ -111,7 +120,7 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
      RenderCtx ctx;
      ctx.settings = &s;
      ctx.runtime = &rt;
@@ -241,7 +242,7 @@ index d998fdc..9c65d81 100644
      ctx.fonts[0] = d_.fonts[0];
      ctx.fonts[1] = d_.fonts[1];
      d_.clock->fill(ctx, nowMs);
-@@ -124,21 +133,21 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+@@ -127,21 +136,21 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
  const GfxFont& RenderPipeline::fontFor(const AppSpec* spec) const {
    const uint8_t i = static_cast<uint8_t>(spec ? spec->font : FontId::Small);
    const GfxFont* f = i < kFontCount ? d_.fonts[i] : nullptr;
@@ -268,7 +269,7 @@ index d998fdc..9c65d81 100644
    layout.textOffset = spec->textOffsetX;
    return layout;
  }
-@@ -146,7 +155,7 @@ render::ScrollLayout RenderPipeline::scrollLayoutFor(const AppSpec* spec, int ca
+@@ -149,7 +158,7 @@ render::ScrollLayout RenderPipeline::scrollLayoutFor(const AppSpec* spec, int ca
  void RenderPipeline::applyScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs) {
    const bool iconReservesColumn = slot.valid && !iconIsFullScreen(&slot, width_);
    slot.scroll.set(spec ? spec->scroll : ScrollSpec{}, d_.engine->state().settings().scrollDefaults,
@@ -277,7 +278,7 @@ index d998fdc..9c65d81 100644
  }
  
  int RenderPipeline::scrollParkAfter(const AppSpec* spec, bool isNotif) const {
-@@ -192,9 +201,10 @@ void RenderPipeline::playPageSound(const AppSpec& spec) {
+@@ -195,9 +204,10 @@ void RenderPipeline::playPageSound(const AppSpec& spec) {
  // and bottom corner.
  void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
    const RuntimeState& rt = d_.engine->state().runtime();
@@ -291,7 +292,7 @@ index d998fdc..9c65d81 100644
    struct Shape {
      int count;
      int px[3][2];
-@@ -210,7 +220,7 @@ void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
+@@ -213,7 +223,7 @@ void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
      if (ind.blinkMs > 0 && ((nowMs / ind.blinkMs) & 1L)) continue;
      const uint32_t rgb = pulse(ind.color, nowMs, ind.fadeMs);
      for (int p = 0; p < shapes[i].count; ++p)

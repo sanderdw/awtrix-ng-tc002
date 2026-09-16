@@ -4,7 +4,7 @@ Three layers, strictly separated:
 
 | Layer | Where | Rule |
 |---|---|---|
-| Upstream AWTRIX NG | `upstream/awtrix-ng` (git submodule) | Pinned to one upstream commit. Never edited. |
+| Upstream AWTRIX NG | `upstream/awtrix-ng` (git submodule) | Pinned to one upstream commit (v1.1.1). Never edited. |
 | Patch series | `patches/NNNN-*.patch` | Small, ordered `git format-patch` commits on top of the pin. Each is either a hook upstream could take as-is (with the upstream default unchanged) or guarded by `AWTRIX_TC002` / a build-time macro. |
 | Port | `src/tc002`, `src/loader`, `src/updater`, `tools`, `tests`, `docs` | Everything TC002-specific. Compiles against the patched tree, never against the submodule directly. |
 

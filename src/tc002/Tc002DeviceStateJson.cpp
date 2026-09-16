@@ -8,6 +8,7 @@
 #include "core/CoreEngine.h"
 #include "hal/IBoard.h"
 #include "system/MonotonicClock.h"
+#include "transport/http/UpdateImage.h"
 
 namespace awtrix {
 
@@ -17,6 +18,7 @@ std::string buildDeviceStateJson(CoreEngine& engine, IBoard& board, const std::s
   DeviceFacts facts;
   facts.boardType = "tc002";
   facts.soc = "ssd202d";
+  facts.updateImage = kUpdateImageName;  // empty: this port has no ESP32-style image feed
   facts.ipAddress = tc002::ipAddress();
   const char* hn = WiFi.getHostname();
   facts.hostname = hn ? hn : "";

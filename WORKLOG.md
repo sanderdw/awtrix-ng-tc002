@@ -6,7 +6,7 @@ rounds; earlier version numbers and test counts describe those earlier rounds.
 Paths under `device-private/` and `dist/` refer to local evidence and artifacts
 that are not included in the public repository.
 
-Upstream: AWTRIX NG 1.1.0, commit `4ff1de83428ed13cae6e210dfcbf9d186a09bc60`.
+Upstream: AWTRIX NG 1.1.1, commit `73b4582e157484a737397bb0fa616da62212fe9e` (earlier rounds: 1.1.0, `4ff1de83428ed13cae6e210dfcbf9d186a09bc60`).
 Device: TC002 stock app 1.1.1, MCU V1.0.17, ARMv7 SSD202D, glibc 2.30.
 Validation date: 2026-09-15. Permanent installation and startup after Linux reboot passed.
 

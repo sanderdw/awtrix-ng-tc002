@@ -8428,6 +8428,7 @@
    "mp3": false,
    "radio": false
   },
+  "scriptUpdates": true,
   "matrix": {
    "width": 52,
    "height": 16,
@@ -8443,12 +8444,13 @@
   }
  },
  "version": {
-  "version": "1.1.0-tc002.8"
+  "version": "1.1.1-tc002.1"
  },
  "device": {
-  "version": "1.1.0-tc002.8",
+  "version": "1.1.1-tc002.1",
   "boardType": "tc002",
   "soc": "ssd202d",
+  "updateImage": "",
   "scriptingRunning": true,
   "scriptHeapPool": "internal",
   "scriptHeapBudgetBytes": 98304,
@@ -8511,6 +8513,7 @@
   "panels": 1,
   "panelStart": "topLeft",
   "panelWiring": "rows",
+  "panelColorOrder": "grb",
   "panelSerpentine": true,
   "panelChainReverse": false,
   "panelChainSerpentine": false,
@@ -8524,8 +8527,6 @@
   "tempDecimals": 0,
   "debugMode": false,
   "scriptingEnabled": true,
-  "scriptLimit": 16,
-  "scriptMaxBytes": 16384,
   "pinMatrix": 32,
   "pinBtnLeft": 26,
   "pinBtnSelect": 27,
@@ -8539,7 +8540,9 @@
   "pinDfTx": 18,
   "pinI2sBclk": -1,
   "pinI2sLrclk": -1,
-  "pinI2sDout": -1
+  "pinI2sDout": -1,
+  "pinI2sMclk": -1,
+  "pinAmpEnable": -1
  },
- "webuiSha256": "05a9d3a031b8694d4db529657f4782cf36c1a4786d381c9eabbaaf9eb45e56af"
+ "webuiSha256": "6475a6c97cb45cfdba83e970f1d687d37d5b5c0817636b7077fe83489416b249"
 }

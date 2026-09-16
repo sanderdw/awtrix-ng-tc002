@@ -7,10 +7,10 @@ Subject: [PATCH 4/8] sim: serve the MP3 routes like the device
 the simulator answered 404, so the web UI's audio page could not be exercised.
 
 diff --git a/src/sim/SimHttpServer.cpp b/src/sim/SimHttpServer.cpp
-index f680a39..72ea00d 100644
+index 636db16..c82abbd 100644
 --- a/src/sim/SimHttpServer.cpp
 +++ b/src/sim/SimHttpServer.cpp
-@@ -213,8 +213,10 @@ struct SimHttpServer::Impl {
+@@ -214,8 +214,10 @@ struct SimHttpServer::Impl {
    bool serveState(const httplib::Request& req, const std::string& method, httplib::Response& res);
    bool serveSystem(const httplib::Request& req, const std::string& method, httplib::Response& res);
    std::string systemJson(bool withSecrets = false) const;
@@ -22,7 +22,7 @@ index f680a39..72ea00d 100644
    void handleRestore(const httplib::Request& req, const std::string& method, httplib::Response& res);
    void handleSim(const httplib::Request& req, const std::string& method, httplib::Response& res);
  };
-@@ -326,10 +328,50 @@ void SimHttpServer::Impl::handleSounds(const httplib::Request& req, const std::s
+@@ -327,10 +329,50 @@ void SimHttpServer::Impl::handleSounds(const httplib::Request& req, const std::s
    sendError(res, 405, "methodNotAllowed", "allowed method(s): PUT, DELETE");
  }
  
@@ -75,7 +75,7 @@ index f680a39..72ea00d 100644
      if (dir.empty() || dir[0] != '/') dir = "/" + dir;
      if (dir.find("..") != std::string::npos) {
        sendError(res, 400, "invalidPath", "path traversal rejected");
-@@ -359,7 +401,8 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
+@@ -360,7 +402,8 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
      return;
    }
    if (method == "POST") {
@@ -85,7 +85,7 @@ index f680a39..72ea00d 100644
      if (dir.empty() || dir[0] != '/') dir = "/" + dir;
      if (dir.find("..") != std::string::npos) {
        sendError(res, 400, "invalidPath", "path traversal rejected");
-@@ -398,7 +441,8 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
+@@ -399,7 +442,8 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
      return;
    }
    if (method == "DELETE") {
@@ -95,7 +95,7 @@ index f680a39..72ea00d 100644
      if (!assets::isWritable(fn)) {
        sendError(res, 400, "invalidPath",
                  "path must be under /ICONS, /MELODIES, /PALETTES or /MP3 and contain no '..'");
-@@ -555,6 +599,11 @@ void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response&
+@@ -568,6 +612,11 @@ void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response&
      return;
    }
  

@@ -8,10 +8,10 @@ The clock has fixed wiring and a fixed 52 by 16 matrix; a restored backup or a
 PUT that changes them is refused with 422 instead of being applied silently.
 
 diff --git a/src/persistence/SystemConfigApply.cpp b/src/persistence/SystemConfigApply.cpp
-index 0699ab1..4a9c687 100644
+index 23722a0..a45c682 100644
 --- a/src/persistence/SystemConfigApply.cpp
 +++ b/src/persistence/SystemConfigApply.cpp
-@@ -20,6 +20,20 @@ bool apply(DeviceConfig& cfg, api::JsonReader obj, int& applied, ApplyError& err
+@@ -20,6 +20,21 @@ bool apply(DeviceConfig& cfg, api::JsonReader obj, int& applied, ApplyError& err
    DeviceConfig merged = cfg;
    const std::string ssid = merged.wifiSsid, pass = merged.wifiPass;
    applied = merged.applyRead(obj);
@@ -22,11 +22,12 @@ index 0699ab1..4a9c687 100644
 +  }
 +#define FIXED(key) if(merged.key!=cfg.key) { \
 +  err={422,"validationFailed","TC002 hardware wiring is fixed",#key}; return false; }
-+  FIXED(panelStart) FIXED(panelWiring) FIXED(panelSerpentine)
++  FIXED(panelStart) FIXED(panelWiring) FIXED(panelColorOrder) FIXED(panelSerpentine)
 +  FIXED(panelChainReverse) FIXED(panelChainSerpentine) FIXED(dfplayer)
 +  FIXED(pinMatrix) FIXED(pinBtnLeft) FIXED(pinBtnSelect) FIXED(pinBtnRight)
 +  FIXED(pinBattery) FIXED(pinLdr) FIXED(pinBuzzer) FIXED(pinI2cSda) FIXED(pinI2cScl)
 +  FIXED(pinDfRx) FIXED(pinDfTx) FIXED(pinI2sBclk) FIXED(pinI2sLrclk) FIXED(pinI2sDout)
++  FIXED(pinI2sMclk) FIXED(pinAmpEnable)
 +#undef FIXED
 +#endif
    // A restored backup keeps the credentials this device is connected with — the backup may come

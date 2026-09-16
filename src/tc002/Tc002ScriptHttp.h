@@ -51,7 +51,7 @@ class Tc002ScriptHttp : public script::IScriptHttp {
       const std::string type = contentType(req.headers);
 
       script::HttpBodyFilter filter;
-      filter.begin(req.find, req.keep, maxBytes);
+      filter.begin(req.find, req.keep, script::httpBodyCap(maxBytes));
       httplib::Request request;
       request.method = req.method.empty() ? "GET" : req.method;
       request.path = target;
@@ -68,7 +68,7 @@ class Tc002ScriptHttp : public script::IScriptHttp {
       };
       auto res = cli.send(request);
       if (res || (r.status && filter.done())) {
-        r.ok = filter.matched();
+        r.ok = filter.matched() && !filter.outOfRoom();
         if (r.ok) r.body = std::move(filter.body());
       }
       pending_.fetch_sub(1);
