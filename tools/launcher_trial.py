@@ -5,8 +5,9 @@ import argparse
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('host')
 a=p.parse_args()
-adb=os.environ.get('ADB') or shutil.which('adb')
-if not adb: p.error('set ADB to Google platform-tools adb')
+import sys; sys.path.insert(0,str(Path(__file__).resolve().parent))
+from paths import adb as find_adb
+adb=find_adb()
 serial=a.host+':5555'
 def device(*args):
     return subprocess.run([adb,'-s',serial,*args],check=True,capture_output=True,text=True).stdout

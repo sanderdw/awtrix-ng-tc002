@@ -253,11 +253,14 @@ application, web UI, CA certificates, trial runner and license notices. It does
 not contain vendor device files, personal backups or a firmware updater. Extract
 it and run the commands in its README; no compilation is needed to try it.
 
-Use Google Android platform-tools ADB. The TC002's old ADB implementation does
-not support `adb reverse`. Port 5555 must be reachable on your local network.
+Use Google Android platform-tools ADB; the Python adb libraries cannot do file
+sync with the TC002's old ADB, and `adb reverse` is unsupported. Port 5555 must
+be reachable on your local network. `bash tools/fetch_platform_tools.sh`
+downloads adb into `build-deps/`, where every tool finds it; `ADB=/path/to/adb`
+overrides that.
 
 ```sh
-ADB=/path/to/platform-tools/adb uv run tools/trial.py CLOCK_IP \
+uv run tools/trial.py CLOCK_IP \
   --binary dist/bin/awtrix-tc002 --seconds 180 --tone
 ```
 
@@ -370,7 +373,7 @@ For MQTT tests against the actual ARM binary, compile `tools/mqtt_test_relay.c`
 with the cross compiler, then:
 
 ```sh
-ADB=/path/to/adb AWTRIX_DEVICE_SERIAL=CLOCK_IP:5555 \
+AWTRIX_DEVICE_SERIAL=CLOCK_IP:5555 \
 AWTRIX_TEST_RELAY=/path/to/arm-relay AWTRIX_TEST_BINARY=dist/bin/awtrix-tc002 \
 uv run pytest -q tests/test_integration.py
 ```

@@ -10,11 +10,13 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 JSON = ROOT / 'src/tc002/vendor-fingerprints.json'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def load():
@@ -46,9 +48,8 @@ def generate(output):
 
 
 def capture(host):
-    adb = os.environ.get('ADB') or shutil.which('adb')
-    if not adb:
-        raise SystemExit('set ADB to Google platform-tools adb')
+    from paths import adb as find_adb
+    adb = find_adb()
     serial = host if ':' in host else host + ':5555'
     subprocess.run([adb, 'connect', serial], check=True)
 

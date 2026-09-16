@@ -1,13 +1,14 @@
 """Explicit shell/push/pull through Google platform-tools.
 
 Run: uv run tools/device.py CLOCK_IP shell 'getprop init.svc.zkswe'
-Set ADB=/path/to/platform-tools/adb when adb is not on PATH.
+adb comes from $ADB, PATH or build-deps/platform-tools (tools/fetch_platform_tools.sh).
 The Python adb-shell client is incompatible with TC002 sync sessions.
 """
 import argparse
 import os
 import shutil
 import subprocess
+import sys
 
 
 def main():
@@ -17,9 +18,9 @@ def main():
     p.add_argument("source")
     p.add_argument("destination", nargs="?")
     a = p.parse_args()
-    adb = os.environ.get("ADB") or shutil.which("adb")
-    if not adb:
-        p.error("Install Google platform-tools and set ADB to its adb executable")
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from paths import adb as find_adb
+    adb = find_adb()
     if a.operation != "shell" and not a.destination:
         p.error("push/pull needs a destination")
     serial = a.host if ":" in a.host else a.host+":5555"

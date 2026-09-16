@@ -86,7 +86,8 @@ def device(tmp_path_factory):
     folder = tmp_path_factory.mktemp("tc002-integration")
     broker_port, http_port = port(), port()
     serial = os.environ.get("AWTRIX_DEVICE_SERIAL")
-    adb = os.environ.get("ADB", "adb")
+    from paths import adb as find_adb
+    adb = find_adb()
     broker_host = os.environ.get("AWTRIX_TEST_BROKER_HOST", "127.0.0.1")
     relay_binary = os.environ.get("AWTRIX_TEST_RELAY")
     reverse = serial and broker_host == "127.0.0.1" and not relay_binary

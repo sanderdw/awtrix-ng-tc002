@@ -1,5 +1,5 @@
 """Run AWTRIX from RAM and restart the installed launcher on exit. Never flashes.
-Usage: ADB=/path/to/adb uv run tools/trial.py CLOCK_IP --seconds 120 --tone
+Usage: uv run tools/trial.py CLOCK_IP --seconds 120 --tone  (adb from $ADB, PATH or build-deps/platform-tools)
 """
 import argparse
 import json
@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -18,8 +19,9 @@ p.add_argument('--binary',type=Path,default=Path('build-tc002/awtrix-tc002'))
 p.add_argument('--tone',action='store_true')
 a=p.parse_args()
 if not 20<=a.seconds<=600: p.error('seconds must be between 20 and 600')
-adb=os.environ.get('ADB') or shutil.which('adb')
-if not adb: p.error('set ADB to Google platform-tools adb')
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from paths import adb as find_adb
+adb=find_adb()
 serial=a.host+':5555'
 def device(*args):
     return subprocess.run([adb,'-s',serial,*args],check=True,capture_output=True,text=True).stdout
