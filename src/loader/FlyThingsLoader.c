@@ -15,6 +15,7 @@
 #include <net/if.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "BootGuard.h"
 #include "InheritedProperties.h"
 #include "InputDevices.h"
@@ -25,9 +26,21 @@ static void (*vendorDeinit)(void*);
 static const char* (*vendorStartupApp)(void*);
 static int fallback;
 
+static const char* dataDir = "/data/awtrix-ng";
+
+/* Two copies: /tmp for this boot, and a small synced file on the data partition that survives
+ * the power cuts the boot counter is there for. */
 static void note(const char* message) {
+    char path[300];
+    float uptime = 0;
+    FILE* up = fopen("/proc/uptime", "r");
+    if (up) { if (fscanf(up, "%f", &uptime) != 1) uptime = 0; fclose(up); }
     FILE* log = fopen("/tmp/awtrix-loader.log", "a");
-    if (log) { fputs(message, log); fputc('\n', log); fclose(log); }
+    if (log) { fprintf(log, "[%6.1fs] %s\n", uptime, message); fclose(log); }
+    snprintf(path, sizeof(path), "%s/launcher.log", dataDir);
+    struct stat info;
+    log = fopen(path, stat(path, &info) == 0 && info.st_size > 16384 ? "w" : "a");
+    if (log) { fprintf(log, "[%6.1fs] %s\n", uptime, message); fflush(log); fsync(fileno(log)); fclose(log); }
 }
 
 /* Hand the process over to the vendor application: its plugin entry points run as if this
@@ -54,20 +67,31 @@ void onEasyUIInit(void* context) {
     snprintf(data,sizeof(data),"%s",trial ? "/tmp/awtrix-launcher-data" : "/data/awtrix-ng");
     snprintf(vendor,sizeof(vendor),"%s",trial ? "/res/lib/libzkgui.so" : "/res/lib/libulanzi-bootstrap.so");
     snprintf(counter,sizeof(counter),"%s/boot-attempts",data);
+    if(trial) dataDir="/tmp/awtrix-launcher-data";
+    int attempts=0, held=0;
+    if(!trial) {
+        /* Count this start before anything slow happens, so a power cut a few seconds into the
+         * boot still leaves its mark. */
+        int inputs[2];
+        const int count=tc002OpenInputDevices(inputs,2,O_RDONLY|O_NONBLOCK|O_CLOEXEC);
+        held=tc002SelectHeld(inputs,count);
+        int i;
+        for(i=0;i<count;++i) close(inputs[i]);
+        if(!held) {
+            attempts=tc002RecordBootAttempt(counter);
+            char line[96];
+            snprintf(line,sizeof(line),"start recorded: attempt %d of %d before fallback",attempts,TC002_BOOT_ATTEMPT_LIMIT);
+            note(line);
+        }
+    }
     system("/bin/setprop sys.zkapp.state running");
     bootstrap=dlopen(vendor,RTLD_LAZY|RTLD_GLOBAL);
     if(!trial) {
-        int inputs[2];
-        const int count=tc002OpenInputDevices(inputs,2,O_RDONLY|O_NONBLOCK|O_CLOEXEC);
-        const int held=tc002SelectHeld(inputs,count);
-        int i;
-        for(i=0;i<count;++i) close(inputs[i]);
         if(held) {
             tc002ClearBootAttempts(counter);
             runVendorApplication(context,"knob held at power-on: starting the vendor application");
             return;
         }
-        const int attempts=tc002RecordBootAttempt(counter);
         if(tc002ShouldFallBack(attempts)) {
             tc002ClearBootAttempts(counter);
             runVendorApplication(context,"AWTRIX did not start healthily three times: starting the vendor application");
@@ -92,6 +116,7 @@ void onEasyUIInit(void* context) {
     int log=open("/tmp/awtrix-ng.log",O_WRONLY|O_CREAT|O_TRUNC,0600);
     if(log>=0) { dup2(log,1); dup2(log,2); if(log>2) close(log); }
     /* Release hardware descriptors but preserve the vendor property mapping. */
+    note("handing over to AWTRIX");
     tc002PrepareExecDescriptors();
     if(trial)
       execl(binary,binary,"--hardware","--no-matrix","--data",data,"--webui",ui,
