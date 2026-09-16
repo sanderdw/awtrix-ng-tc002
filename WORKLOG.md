@@ -82,9 +82,7 @@ Validation date: 2026-09-15. Permanent installation and startup after Linux rebo
 - 1.1.0-tc002.9 has not been installed on a clock yet. New and untested on hardware:
   the knob-hold and three-strikes fallback to the vendor application, firmware
   staging under `/data/awtrix-ng/staging`, the preflight-before-install step, and
-  the vendor fingerprint gate (the two rootfs library hashes still need capturing
-  with `tools/vendor_fingerprints.py capture`; until then audio and vendor Wi-Fi
-  provisioning are off by design). Run docs/VALIDATION.md before tagging it.
+  the vendor fingerprint gate. Run docs/VALIDATION.md before tagging it.
 - Wi-Fi credential changes, static addressing and fallback access-point mode are
   implemented but untested physically; tests preserved the owner's connection.
 - A real external radio station, playlist and live ICY metadata have not been
@@ -382,3 +380,23 @@ golden screens unchanged) and not yet on a clock:
   `/api/v1/tc002/vendor`.
 - `tools/image.py` takes the version from CMakeLists.txt and only marks a build
   validated through `--validated`, per docs/VALIDATION.md.
+
+## 2026-09-16: device facts and vendor fingerprints (1.1.1-tc002.1 candidate)
+
+Read from the clock over ADB, without changing anything on it:
+
+- Flash: `mtd3 res` 8 MiB (squashfs, AWTRIX), `mtd6 data` 8 MiB jffs2 mounted at
+  `/data` with about 7.6 MiB free, `mtd2 rootfs` 4.3 MiB squashfs, `mtd4 config`,
+  `mtd7 UDISK` (vfat). `/tmp` is a 16 MiB tmpfs. MemAvailable about 15 MiB.
+- The vendor libraries the port calls are on the rootfs: `/lib/libmi_ao.so` and
+  `/lib/libzknet.so`; the vendor application is `/res/lib/libulanzi-bootstrap.so`.
+  Their SHA-256 values are now in `src/tc002/vendor-fingerprints.json`.
+- Input nodes: `/dev/input/event67` is `soc:gpio_keys_1`, `/dev/input/event68` is
+  `knob_key`. The capability scan in `src/tc002/InputDevices.h` tries these first.
+- Installed: 1.1.0-tc002.7, MCU V1.0.17, DHCP DNS, MQTT and NTP working.
+- The clock's BusyBox has no `find`, `grep` or `head`; device tools use `ls` and
+  parse on the host.
+
+The firmware staging check now asks for room for the actual upload (Content-Length
+plus 1 MiB) instead of a fixed 9 MiB, which this 8 MiB data partition could never
+provide, and reports a full partition as 507 instead of an invalid image.

@@ -49,10 +49,10 @@ clock's 12-character MAC; it can be changed in System → MQTT.
 
 The firmware only calls into the vendor audio and network libraries when the file it loaded
 matches a recorded hash, and the updater refuses to install on an unrecognised stock firmware
-unless told `--force`. `GET /api/v1/tc002/vendor` shows what was checked. Hashes for the two
-rootfs libraries must be captured once from a supported clock with
-`uv run tools/vendor_fingerprints.py capture CLOCK_IP`; until then audio and vendor Wi-Fi
-provisioning stay off on the device.
+unless told `--force`. `GET /api/v1/tc002/vendor` shows what was checked. The recorded hashes were captured from
+the test clock on 2026-09-16 with `uv run tools/vendor_fingerprints.py capture CLOCK_IP`; a
+clock with different files shows them as untrusted and keeps audio and vendor Wi-Fi
+provisioning off.
 
 ## Risks
 

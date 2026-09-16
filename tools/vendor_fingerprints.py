@@ -59,7 +59,13 @@ def capture(host):
     data = load()
     with tempfile.TemporaryDirectory(prefix='tc002-vendor-') as tmp:
         for name, entry in data['libraries'].items():
-            path = entry.get('path') or shell(f"find /lib /usr/lib /res/lib -name {name} 2>/dev/null | head -1")
+            path = entry.get('path')
+            if not path:
+                # The clock's BusyBox has no find; try the directories the firmware uses.
+                for directory in ('/lib', '/res/lib', '/usr/lib'):
+                    if shell(f'ls {directory}/{name} 2>/dev/null').strip() == f'{directory}/{name}':
+                        path = f'{directory}/{name}'
+                        break
             if not path:
                 print(f'{name}: not found on the clock')
                 continue

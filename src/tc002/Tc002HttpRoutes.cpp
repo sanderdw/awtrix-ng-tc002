@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdlib>
 #include <filesystem>
 #include <mutex>
@@ -278,12 +279,19 @@ void handleFirmware(SimHttpServer& server, const DeviceConfig& cfg, const httpli
   }
   std::error_code ec;
   stdfs::create_directories(stdfs::u8path(stagingDir()), ec);
+  // The data partition is an 8 MiB jffs2 volume; ask for room for this upload, not the largest
+  // possible one. Without a Content-Length, assume a typical 5 MiB image.
+  const unsigned long long declared =
+      req.has_header("Content-Length")
+          ? std::strtoull(req.get_header_value("Content-Length").c_str(), nullptr, 10)
+          : 5ull * 1024 * 1024;
   struct statvfs space {};
   if (statvfs(stagingDir().c_str(), &space) != 0 ||
       static_cast<unsigned long long>(space.f_bavail) * space.f_frsize <
-          kFirmwareBodyMax + kStagingReserveBytes) {
+          declared + kStagingReserveBytes) {
     sendError(res, 507, "insufficientStorage",
-              "the data partition needs 9 MiB free to stage a firmware image");
+              ("the data partition needs " + std::to_string((declared + kStagingReserveBytes) / 1024 / 1024 + 1) +
+               " MiB free to stage this image").c_str());
     return;
   }
   std::string path = stagingDir() + "/update-XXXXXX";
@@ -293,7 +301,7 @@ void handleFirmware(SimHttpServer& server, const DeviceConfig& cfg, const httpli
     return;
   }
   fcntl(fd, F_SETFD, FD_CLOEXEC);
-  bool fileSeen = false;
+  bool fileSeen = false, noSpace = false;
   size_t bytes = 0;
   const bool received = reader(
       [&](const httplib::MultipartFormData& file) {
@@ -306,7 +314,10 @@ void handleFirmware(SimHttpServer& server, const DeviceConfig& cfg, const httpli
         size_t pos = 0;
         while (pos < count) {
           const ssize_t n = write(fd, data + pos, count - pos);
-          if (n <= 0) return false;
+          if (n <= 0) {
+            noSpace = errno == ENOSPC;
+            return false;
+          }
           pos += static_cast<size_t>(n);
         }
         bytes += count;
@@ -318,7 +329,8 @@ void handleFirmware(SimHttpServer& server, const DeviceConfig& cfg, const httpli
   close(fd);
   if (!valid) {
     unlink(path.c_str());
-    sendError(res, 422, "invalidImage", error.empty() ? "incomplete or invalid upload" : error.c_str());
+    if (noSpace) sendError(res, 507, "insufficientStorage", "the data partition ran out of room while staging");
+    else sendError(res, 422, "invalidImage", error.empty() ? "incomplete or invalid upload" : error.c_str());
     return;
   }
   const char* helper = "/tmp/awtrix-update-helper";
