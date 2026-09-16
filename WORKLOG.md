@@ -79,6 +79,12 @@ Validation date: 2026-09-15. Permanent installation and startup after Linux rebo
 
 - Physical power-cycle startup and restoring the stock recovery image have not
   been exercised. Installation and automatic startup after Linux reboot passed.
+- 1.1.0-tc002.9 has not been installed on a clock yet. New and untested on hardware:
+  the knob-hold and three-strikes fallback to the vendor application, firmware
+  staging under `/data/awtrix-ng/staging`, the preflight-before-install step, and
+  the vendor fingerprint gate (the two rootfs library hashes still need capturing
+  with `tools/vendor_fingerprints.py capture`; until then audio and vendor Wi-Fi
+  provisioning are off by design). Run docs/VALIDATION.md before tagging it.
 - Wi-Fi credential changes, static addressing and fallback access-point mode are
   implemented but untested physically; tests preserved the owner's connection.
 - A real external radio station, playlist and live ICY metadata have not been
@@ -348,3 +354,31 @@ repository link, and a footer carries the PolyForm Required Notice, the licence
 and a pointer to support upstream. `tests/test_webui_static.py` fails if either
 disappears again. No firmware behaviour changed; the version is bumped so the
 shipped UI is distinguishable from tc002.7.
+
+## 2026-09-16: response to the upstream review (1.1.0-tc002.9 candidate)
+
+The upstream author reviewed the port and declined to adopt it: a fork rather
+than a port, the simulator's web server on a networked device with 8 MiB
+uploads held in RAM, hard coupling to one vendor firmware with no version
+check, an in-place flash with untested cold boot and no recovery without ADB,
+and his Ko-fi button replaced by a link to this repository. Every point was
+checked against the pristine upstream commit and confirmed, except that the
+bootloader, kernel and rootfs were never touched and the public trial ZIP never
+contained vendor files or a flasher.
+
+Changes in this candidate, all verified by the host suite (138 pytest cases,
+golden screens unchanged) and not yet on a clock:
+
+- Ko-fi button and Required Notice restored (shipped as tc002.8).
+- Upstream is a pinned submodule; TC002 changes are eight patches (four hooks
+  with upstream defaults, four guarded); platform code moved to `src/tc002`.
+  Two ESP32 memory regressions in the old in-place edits are gone.
+- Request bodies capped per route before reading; MP3 and firmware uploads
+  stream to storage; one large upload at a time; timeouts bounded.
+- Launcher falls back to the vendor application on a knob hold at power-on or
+  after three failed starts; input nodes found by capability.
+- Vendor libraries only used when their SHA-256 is recorded; the updater
+  refuses unknown stock firmware without `--force`; status at
+  `/api/v1/tc002/vendor`.
+- `tools/image.py` takes the version from CMakeLists.txt and only marks a build
+  validated through `--validated`, per docs/VALIDATION.md.

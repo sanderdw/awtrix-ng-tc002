@@ -1,8 +1,14 @@
 # AWTRIX NG TC002
 
-An unofficial native Linux/ARMv7 port of **AWTRIX NG 1.1.0** for the TC002's
-**52 × 16** pixel matrix. It runs the upstream core, renderer, Berry scripting,
-HTTP API, MQTT dispatcher and web UI directly on the clock.
+An unofficial, community-maintained native Linux/ARMv7 port of **AWTRIX NG 1.1.0** for
+the Ulanzi TC002's **52 × 16** pixel matrix. It runs the upstream core, renderer, Berry
+scripting, HTTP API, MQTT dispatcher and web UI directly on the clock.
+
+**Read [Risks](#risks) before installing anything.** Installing replaces the clock's
+application partition; the RAM trial does not.
+
+Upstream is tracked as a pinned, unmodified git submodule plus a short patch series;
+everything TC002-specific lives in this repository. See [docs/PORTING.md](docs/PORTING.md).
 
 ## Thank you, Blueforcer ❤️
 
@@ -33,14 +39,56 @@ The MQTT interface uses the exact upstream topic paths and payload handling:
 No TC002 topic prefix or translation service is added. The default prefix is the
 clock's 12-character MAC; it can be changed in System → MQTT.
 
+## Supported hardware and firmware
+
+| | Supported | Enforced by |
+|---|---|---|
+| Clock | Ulanzi TC002 (SSD202D, 52 × 16 panel) | flash geometry check in the updater |
+| Stock app | **1.1.1** | SHA-256 of the vendor files in `src/tc002/vendor-fingerprints.json` |
+| MCU firmware | **V1.0.17** | version handshake at start-up (logged, not gated) |
+
+The firmware only calls into the vendor audio and network libraries when the file it loaded
+matches a recorded hash, and the updater refuses to install on an unrecognised stock firmware
+unless told `--force`. `GET /api/v1/tc002/vendor` shows what was checked. Hashes for the two
+rootfs libraries must be captured once from a supported clock with
+`uv run tools/vendor_fingerprints.py capture CLOCK_IP`; until then audio and vendor Wi-Fi
+provisioning stay off on the device.
+
+## Risks
+
+- **Installing writes the `res` flash partition in place.** There is no A/B copy on the
+  clock. The helper validates the image, checks the partition geometry, refuses unknown stock
+  firmware, and verifies every erase block by read-back, but a power cut during the write
+  leaves a partition that needs the recovery steps below.
+- **Cold boot is not validated for every release.** A release is a candidate until the
+  protocol in [docs/VALIDATION.md](docs/VALIDATION.md) has been run on a real clock; the
+  manifest says so.
+- **Recovery without a computer** is the knob-hold at power-on, or three failed starts in a
+  row, both of which start the vendor application instead of AWTRIX. This is implemented in
+  the launcher and unit-tested, but has not yet been exercised on a clock. Recovery over a
+  serial console has never been tried.
+- **Vendor coupling.** Wi-Fi provisioning, audio and the launcher use Ulanzi's closed
+  libraries. A future Ulanzi update can change them; the fingerprint gate then turns those
+  features off instead of guessing.
+
+## Security
+
+The web UI and API are unauthenticated unless you enable the login in System → Web. Without
+it anyone on your network can control the clock, upload files and start a firmware update.
+Request bodies are capped per route before they are read; MP3 and firmware uploads stream to
+storage and are limited to one at a time.
+
 ## Current status
 
-This **1.1.0-tc002.7 release candidate was installed and verified after a Linux reboot** on the
-test clock on 2026-09-15. AWTRIX starts automatically from flash, serves the web UI
-on port 80 and stores settings in `/data/awtrix-ng`. See [WORKLOG.md](WORKLOG.md)
-for measured results and outstanding physical checks.
+The current candidate is **1.1.0-tc002.9**. It restructures the source tree, hardens the
+HTTP server, adds the launcher fallback and the vendor fingerprint gate, and has not yet been
+installed on a clock; the host test suite and golden screens pass. The previous candidate,
+1.1.0-tc002.7, was installed and verified after a Linux reboot on the test clock on
+2026-09-15. AWTRIX starts automatically from flash, serves the web UI on port 80 and stores
+settings in `/data/awtrix-ng`. See [WORKLOG.md](WORKLOG.md) for measured results and
+outstanding physical checks.
 
-Confirmed on TC002 stock app 1.1.1 / MCU V1.0.17:
+Confirmed on TC002 stock app 1.1.1 / MCU V1.0.17 with 1.1.0-tc002.7:
 
 - Correct 52 × 16 RGB output using the full app; about 42 FPS. See the display
   flicker note below for a known issue at some green levels.
@@ -150,10 +198,13 @@ Install `uv`, a C/C++ build environment, Perl, curl, tar, and `squashfs-tools`.
 Python tooling always runs through uv.
 
 ```sh
-git clone https://github.com/sanderdw/awtrix-ng-tc002.git
+git clone --recurse-submodules https://github.com/sanderdw/awtrix-ng-tc002.git
 cd awtrix-ng-tc002
 bash tools/build.sh
 ```
+
+The `upstream/awtrix-ng` submodule must be checked out (`git submodule update --init` on an
+existing clone). Configuring applies `patches/` onto it into `build-upstream/`.
 
 The script downloads SHA-256-pinned Arm GNU 9.2-2019.12 and OpenSSL 3.5.8,
 uses `uv sync --locked`, cross-compiles, and writes stripped binaries into
@@ -268,16 +319,25 @@ chmod 700 /tmp/awtrix-update-helper
 /tmp/awtrix-update-helper --install /tmp/awtrix-update.img
 ```
 
-**`--install` writes flash and reboots.** Use `restore-stock.img` with the same
-helper to restore stock. If a write fails and ADB remains available, keep
-power on and inspect the error before retrying. Do not interrupt power during a
-write. If ADB is unavailable after a failed boot, recovery needs the stock
-bootloader's update path or a serial connection; this has not been validated.
+**`--install` writes flash and reboots.** It first checks the vendor files on the clock
+against the recorded fingerprints and refuses an unrecognised stock firmware unless `--force`
+is added. Use `restore-stock.img` with the same helper to restore stock. If a write fails
+and ADB remains available, keep power on and inspect the error before retrying. Do not
+interrupt power during a write.
+
+If AWTRIX does not come up after an install:
+
+- **Hold the knob while powering on.** The launcher starts the vendor application instead;
+  its stock UI, updater and ADB are back. Power-cycle without holding to try AWTRIX again.
+- **Three failed starts in a row** (never reaching a minute of uptime) do the same
+  automatically on the fourth boot.
+- If neither the vendor application nor ADB comes back, recovery needs the stock
+  bootloader's update path or a serial connection; this has not been validated.
 
 After installation the normal web UI is at the clock's address on the configured
-port (default 80). System → Maintenance accepts TC002 `.img` updates, uses the
-same validator/helper and logs the update at `/tmp/awtrix-update.log`.
-The update helper is about 14 KiB and uploads are streamed to keep RAM use bounded.
+port (default 80). System → Maintenance accepts TC002 `.img` updates: the upload streams
+to `/data/awtrix-ng/staging` (flash, not RAM), the helper's preflight must pass before the
+install starts, and the log is at `/tmp/awtrix-update.log`.
 Assets and configuration live in `/data/awtrix-ng` and survive res updates.
 Restoring stock leaves that AWTRIX data directory intact.
 
@@ -300,7 +360,7 @@ pixels. See the upstream reference for the complete topic list.
 A host build requires OpenSSL development headers:
 
 ```sh
-uv run cmake -S . -B build-host -G Ninja -DCMAKE_BUILD_TYPE=Release
+uv run cmake -S . -B build-host -G Ninja -DCMAKE_BUILD_TYPE=Release   # add -DOPENSSL_ROOT_DIR=... if OpenSSL is not system-wide
 uv run cmake --build build-host -j4
 uv run ctest --test-dir build-host --output-on-failure
 uv run pytest -q
