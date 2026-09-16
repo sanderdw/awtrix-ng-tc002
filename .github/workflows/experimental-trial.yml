@@ -61,16 +61,22 @@ jobs:
           key: tc002-arm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/build.sh', 'tools/build_tls.sh', 'cmake/tc002-arm.cmake') }}
       - name: Build the ARM application
         run: bash tools/build.sh
-      - name: Package and verify the public trial
+      - name: Package and verify the public trial and installer bundles
         run: |
           uv run tools/package_trial.py
           uv run tools/check_trial_package.py dist/public/awtrix-ng-tc002-trial.zip --commit "$GITHUB_SHA"
+          uv run tools/package_installer.py
+          uv run tools/check_trial_package.py dist/public/awtrix-ng-tc002-installer.zip --commit "$GITHUB_SHA"
+          cp install.sh dist/public/install.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: experimental-trial
           path: |
             dist/public/awtrix-ng-tc002-trial.zip
             dist/public/awtrix-ng-tc002-trial.zip.sha256
+            dist/public/awtrix-ng-tc002-installer.zip
+            dist/public/awtrix-ng-tc002-installer.zip.sha256
+            dist/public/install.sh
           if-no-files-found: error
           retention-days: 14
 
@@ -96,7 +102,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          (cd dist/public && sha256sum -c awtrix-ng-tc002-trial.zip.sha256)
+          (cd dist/public && sha256sum -c awtrix-ng-tc002-trial.zip.sha256 && sha256sum -c awtrix-ng-tc002-installer.zip.sha256)
           tag="$GITHUB_REF_NAME"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists; its tag and downloads are preserved."
@@ -109,5 +115,8 @@ jobs:
           gh release create "$tag" \
             dist/public/awtrix-ng-tc002-trial.zip \
             dist/public/awtrix-ng-tc002-trial.zip.sha256 \
+            dist/public/awtrix-ng-tc002-installer.zip \
+            dist/public/awtrix-ng-tc002-installer.zip.sha256 \
+            dist/public/install.sh \
             --verify-tag --prerelease --latest=false \
             --title "AWTRIX NG TC002 $tag (experimental RAM trial)" --notes-file "$notes"

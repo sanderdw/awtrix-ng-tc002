@@ -1,4 +1,4 @@
-"""Validate the public trial archive before publishing it. Does not contact a clock."""
+"""Validate a public archive (trial or installer) before publishing it. Does not contact a clock."""
 import argparse
 import hashlib
 import json
@@ -8,12 +8,16 @@ import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-REQUIRED = {
-    'bin/awtrix-tc002', 'try.py', 'README.md', 'manifest.json',
-    'upstream/awtrix-ng/webui/index.html', 'assets/cacert.pem',
-    'LICENSE.md', 'THIRD-PARTY-NOTICES.md',
-    'upstream/awtrix-ng/THIRD-PARTY-NOTICES.md',
-    'vendor/openssl/LICENSE', 'vendor/PubSubClient/LICENSE.txt',
+NOTICES = {
+    'LICENSE.md', 'THIRD-PARTY-NOTICES.md', 'upstream/awtrix-ng/THIRD-PARTY-NOTICES.md',
+    'vendor/openssl/LICENSE', 'vendor/PubSubClient/LICENSE.txt', 'manifest.json', 'README.md',
+}
+KINDS = {
+    'awtrix-ng-tc002-trial': NOTICES | {
+        'bin/awtrix-tc002', 'try.py', 'upstream/awtrix-ng/webui/index.html', 'assets/cacert.pem'},
+    'awtrix-ng-tc002-installer': NOTICES | {
+        'bin/awtrix-tc002', 'bin/tc002-update', 'bin/libzkgui.so', 'install.py', 'image.py',
+        'vendor-fingerprints.json', 'webui/index.html', 'assets/cacert.pem'},
 }
 
 
@@ -26,7 +30,11 @@ def main():
     expected = hashlib.sha256(args.archive.read_bytes()).hexdigest() + '  ' + args.archive.name
     if checksum != expected:
         parser.error('archive checksum does not match')
-    prefix = 'awtrix-ng-tc002-trial/'
+    kind = args.archive.name[:-4]
+    if kind not in KINDS:
+        parser.error('unknown archive kind: ' + kind)
+    REQUIRED = KINDS[kind]
+    prefix = kind + '/'
     with zipfile.ZipFile(args.archive) as archive:
         paths = archive.namelist()
         if archive.testzip() is not None or len(paths) != len(set(paths)):
@@ -52,16 +60,19 @@ def main():
             data = archive.read(prefix + name)
             if len(data) != entry['bytes'] or hashlib.sha256(data).hexdigest() != entry['sha256']:
                 parser.error('file checksum mismatch: ' + name)
-        binary = archive.read(prefix + 'bin/awtrix-tc002')
-        if binary[:6] != b'\x7fELF\x01\x01' or binary[18:20] != b'\x28\x00':
-            parser.error('application is not an ARM Linux binary')
-        with tempfile.TemporaryDirectory(prefix='tc002-trial-check-') as tmp:
+        for entry in names:
+            if entry.startswith('bin/'):
+                binary = archive.read(prefix + entry)
+                if binary[:6] != b'\x7fELF\x01\x01' or binary[18:20] != b'\x28\x00':
+                    parser.error(entry + ' is not an ARM Linux binary')
+        with tempfile.TemporaryDirectory(prefix='tc002-package-check-') as tmp:
             archive.extractall(tmp)
-            result = subprocess.run([sys.executable, 'try.py', '--help'],
+            script, flags = ('try.py', ('--seconds', '--binary')) if 'try.py' in names else ('install.py', ('--restore', '--build-only'))
+            result = subprocess.run([sys.executable, script, '--help'],
                                     cwd=Path(tmp) / prefix, check=True, capture_output=True, text=True)
-            if '--seconds' not in result.stdout or '--binary' not in result.stdout:
-                parser.error('trial runner CLI is incomplete')
-    print(f'Validated {len(paths)} public trial files and all checksums; trial CLI works.')
+            if any(flag not in result.stdout for flag in flags):
+                parser.error(script + ' CLI is incomplete')
+    print(f'Validated {len(paths)} public files in {kind} and all checksums; its CLI works.')
 
 
 if __name__ == '__main__':

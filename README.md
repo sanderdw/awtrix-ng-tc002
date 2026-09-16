@@ -79,7 +79,7 @@ storage and are limited to one at a time.
 
 ## Current status
 
-The current candidate is **1.1.1-tc002.4** (upstream 1.1.1). It restructures the source tree, hardens the
+The current candidate is **1.1.1-tc002.5** (upstream 1.1.1). It restructures the source tree, hardens the
 HTTP server, adds the launcher fallback and the vendor fingerprint gate, and has not yet been
 installed on a clock; the host test suite and golden screens pass. The previous candidate,
 1.1.0-tc002.7, was installed and verified after a Linux reboot on the test clock on
@@ -214,6 +214,20 @@ Existing build dependencies can be reused:
 ```sh
 TC002_TOOLCHAIN=/path/to/gcc9 TC002_TLS=/path/to/openssl-build bash tools/build.sh
 ```
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- CLOCK_IP
+```
+
+Needs `python3`, `curl`, `unzip` and squashfs-tools on a Linux or macOS computer (WSL on
+Windows); `adb` is downloaded for you. The installer reads your clock's application partition,
+verifies the stock firmware, builds `update.img` and `restore-stock.img` on your computer, runs
+the helper's preflight, and flashes only after you type `flash`. It never downloads a firmware
+image, because the image contains Ulanzi's own application. Details, requirements, the way back
+to stock and what to do if the clock does not come back: [docs/INSTALL.md](docs/INSTALL.md).
+Prefer trying it from RAM first; that flashes nothing.
 
 ## Try from RAM first
 

@@ -482,3 +482,17 @@ Validation status for 1.1.1-tc002.4: preflight, web-UI install, warm restart
 over ADB, two cold boots, knob-hold fallback and crash-loop fallback all pass
 on stock 1.1.1 / MCU V1.0.17. Not run: restore-stock through the web UI and
 the reinstall after it (steps 8 and 9 of docs/VALIDATION.md).
+
+## 2026-09-16: one-line installer (1.1.1-tc002.5)
+
+`install.sh` downloads a released installer bundle, verifies its checksum and runs
+`install.py`, which needs only python3, adb (downloaded on demand) and squashfs-tools:
+it reads the clock's application partition over ADB, verifies the vendor fingerprints,
+builds `update.img` and `restore-stock.img` on the computer with a synthesized
+container header (no stock update file needed), runs the helper's preflight, asks the
+user to type `flash`, installs and waits for the new version. `--restore` flashes the
+recovery image back. `tools/image.py` became a library and now rebuilds the vendor
+layout from a partition that already carries the port. The bundle is validated by the
+same allowlist checker as the trial ZIP and contains no vendor file. Exercised in
+build-only mode against the test clock: dump, three fingerprints verified, both images
+valid; the firmware itself is unchanged from tc002.4.

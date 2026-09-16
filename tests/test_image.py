@@ -82,3 +82,30 @@ def test_manifest_version_comes_from_cmake_and_status_from_validation():
     assert image.firmware_version() == re.search(r'AWTRIX_NG_VERSION="([^"]+)"', cmake)[1]
     assert image.manifest_status(None) == "release-candidate; not cold-boot validated"
     assert image.manifest_status("2026-09-20").startswith("cold-boot validated on 2026-09-20")
+
+
+def test_synthesized_header_round_trips_without_a_stock_image():
+    payload = bytearray(8192)
+    payload[:4] = b"hsqs"
+    struct.pack_into("<Q", payload, 40, 6000)
+    packed = image.pack(bytes(payload))
+    assert image.unpack(packed) == bytes(payload[:6000]).ljust(8192, b"\x00")
+    assert len(packed) == 572 + 8192
+
+
+def test_restore_stock_tree_undoes_an_installed_port(tmp_path):
+    tree = tmp_path / "res"
+    (tree / "lib").mkdir(parents=True)
+    (tree / "bin").mkdir()
+    (tree / "ui").mkdir()
+    (tree / "etc").mkdir()
+    (tree / "lib/libulanzi-bootstrap.so").write_bytes(b"vendor gui")
+    (tree / "lib/libzkgui.so").write_bytes(b"port loader")
+    for name in image.PORT_FILES:
+        (tree / name).write_bytes(b"port")
+    (tree / "etc/EasyUI.cfg").write_text('{"startupLibPath": "/res/lib/libzkgui.so", "uart": "ttyS1"}')
+    assert image.restore_stock_tree(tree)
+    assert (tree / "lib/libzkgui.so").read_bytes() == b"vendor gui"
+    assert not (tree / "lib/libulanzi-bootstrap.so").exists()
+    assert not any((tree / name).exists() for name in image.PORT_FILES)
+    assert not image.restore_stock_tree(tree)   # a stock tree is left alone
