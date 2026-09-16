@@ -559,8 +559,11 @@ int main(int argc, char** argv) {
     }
     const int64_t now = monotonicMs();
     {
+      // Measured from the application's own start: the monotonic clock counts from Linux boot,
+      // and the launcher may already have spent most of a minute waiting for Wi-Fi.
+      static const int64_t appStartMs = now;
       static bool bootAcknowledged = false;
-      if (!bootAcknowledged && now >= kHealthyUptimeMs) {
+      if (!bootAcknowledged && now - appStartMs >= kHealthyUptimeMs) {
         bootAcknowledged = true;
         std::error_code ec;
         stdfs::remove(stdfs::u8path(sim::dataDir() + "/boot-attempts"), ec);

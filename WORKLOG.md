@@ -447,3 +447,15 @@ AWTRIX process; the validation protocol now says `adb shell reboot`.
   started and `boot-attempts` read 1. The launcher's counter writes were never committed
   to jffs2 before the power cuts. Fix: the launcher now fsyncs the counter file and its
   directory. Retest of this step is pending on tc002.3.
+
+## 2026-09-16: three-strikes counter was cleared by the app, not lost by the flash (1.1.1-tc002.4)
+
+A synced marker file on `/data` survived a power cut, and the launcher's counter
+writes were confirmed on clean boots, so the flash was not losing anything. The
+app cleared the counter as soon as the monotonic clock passed 60 s, and that
+clock counts from Linux boot: after a cold start the launcher can wait up to
+45 s for Wi-Fi first, so the app often started past the mark and deleted the
+counter on its first frame, before the tester's power cut. The healthy-boot
+mark is now measured from the app's own start. The launcher also records the
+start before loading the vendor library and keeps a synced `launcher.log` on
+the data partition. Retest of the three-strikes step is pending on tc002.4.
