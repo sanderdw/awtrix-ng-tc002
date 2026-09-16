@@ -36,6 +36,10 @@ EDITS = [
      '<button class="icon kofi" id="kofibtn" title="Support Blueforcer, the AWTRIX NG author, on Ko-fi">'),
     ('<use href="#i-kofi"/></svg></button>\n', '<use href="#i-kofi"/></svg></button>\n' + REPO_LINK),
     ('<main id="view"></main>\n', '<main id="view"></main>\n' + FOOTER),
+    ("'Require a login for the UI and API.|Login für UI und API verlangen.'",
+     "'Require a login for the UI and API. While it is off, anyone on your network can control this clock, "
+     "upload files and start a firmware update.|Login für UI und API verlangen. Solange dies aus ist, kann jeder "
+     "im Netzwerk die Uhr steuern, Dateien hochladen und ein Firmware-Update starten.'"),
 ]
 
 

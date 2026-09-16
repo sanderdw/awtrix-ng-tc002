@@ -30,6 +30,8 @@ def app(tmp_path):
         r=urllib.request.Request(f'http://127.0.0.1:{port}'+path,data,headers or {'Content-Type':'application/json'},method=method)
         with urllib.request.urlopen(r,timeout=3) as response: return json.load(response)
     api.base_url = f'http://127.0.0.1:{port}'
+    api.port = port
+    api.pid = p.pid
     try:
         for _ in range(100):
             try: api('/api/v1/device'); break
@@ -128,3 +130,54 @@ def test_authentication_survives_process_restart(app):
         time.sleep(.05)
     else: raise AssertionError('authentication was not applied')
     assert app('/api/v1/device',headers={'Authorization':authorization})['boardType']=='tc002'
+
+
+def raw_status(app, method, path, headers, body=b''):
+    """Send a request by hand and return the status code, without ever sending a full body."""
+    with socket.create_connection(('127.0.0.1', app.port), timeout=5) as s:
+        head = f'{method} {path} HTTP/1.1\r\nHost: clock\r\n' + ''.join(f'{k}: {v}\r\n' for k, v in headers.items()) + '\r\n'
+        s.sendall(head.encode() + body)
+        return int(s.recv(4096).split(b' ')[1])
+
+
+def rss_kib(pid):
+    with open(f'/proc/{pid}/status') as status:
+        return next(int(line.split()[1]) for line in status if line.startswith('VmRSS:'))
+
+
+def test_oversized_bodies_are_rejected_before_they_are_read(app):
+    headers = {'Content-Type': 'application/json', 'Content-Length': str(9 * 1024 * 1024)}
+    assert raw_status(app, 'POST', '/api/v1/notifications', headers) == 413
+    headers['Content-Length'] = '200000'   # over the 64 KiB cap for JSON routes
+    assert raw_status(app, 'POST', '/api/v1/notifications', headers) == 413
+    assert raw_status(app, 'POST', '/api/v1/notifications',
+                      {'Content-Type': 'application/json', 'Transfer-Encoding': 'chunked'}) == 411
+    assert app('/api/v1/notifications', {'text': 'still fine'}, 'POST')['ok']
+
+
+def test_large_mp3_upload_streams_to_disk_within_memory_budget(app):
+    import os
+    content = b'ID3' + os.urandom(6 * 1024 * 1024)
+    before = rss_kib(app.pid)
+    assert upload_mp3(app, 'long-track.mp3', content)['ok']
+    after = rss_kib(app.pid)
+    assert after - before < 2048, f'RSS grew by {after - before} KiB during a 6 MiB upload'
+    assert app('/api/v1/audio/mp3')['files'] == [{'name': 'long-track.mp3', 'size': len(content)}]
+
+
+def test_a_second_large_upload_is_refused_while_one_is_in_flight(app):
+    import threading
+    boundary = 'awtrix-slow-upload'
+    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="slow.mp3"\r\n'
+            f'Content-Type: audio/mpeg\r\n\r\n').encode() + b'ID3' + bytes(300000) + f'\r\n--{boundary}--\r\n'.encode()
+    head = (f'POST /api/v1/audio/mp3 HTTP/1.1\r\nHost: clock\r\nContent-Type: multipart/form-data; boundary={boundary}\r\n'
+            f'Content-Length: {len(body)}\r\n\r\n').encode()
+    with socket.create_connection(('127.0.0.1', app.port), timeout=10) as slow:
+        slow.sendall(head + body[:2000])   # the slow client holds the upload slot with a partial body
+        time.sleep(0.4)
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            upload_mp3(app, 'quick.mp3', b'ID3' + bytes(64))
+        assert refused.value.code == 409
+        slow.sendall(body[2000:])
+        assert int(slow.recv(4096).split(b' ')[1]) == 200
+    assert {f['name'] for f in app('/api/v1/audio/mp3')['files']} == {'slow.mp3'}
