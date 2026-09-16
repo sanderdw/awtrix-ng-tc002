@@ -34,5 +34,7 @@ cd "$dir"
 if command -v sha256sum >/dev/null 2>&1; then sha256sum -c "$NAME.zip.sha256" >/dev/null
 else shasum -a 256 -c "$NAME.zip.sha256" >/dev/null; fi
 rm -rf "$NAME" && unzip -q "$NAME.zip"
-if [ -t 0 ]; then exec python3 "$dir/$NAME/install.py" "$@"
+# Piped through sh, stdin is the script itself; take the confirmation from the terminal when
+# there is one. Without a terminal, install.py still runs (use --yes or --build-only).
+if [ -t 0 ] || ! ( : </dev/tty ) 2>/dev/null; then exec python3 "$dir/$NAME/install.py" "$@"
 else exec python3 "$dir/$NAME/install.py" "$@" </dev/tty; fi
