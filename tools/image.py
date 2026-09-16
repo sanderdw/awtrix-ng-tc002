@@ -85,7 +85,7 @@ def main():
         shutil.copyfile(a.build/"libzkgui.so", original)
         shutil.copyfile(a.build/"awtrix-tc002", tree/"bin/awtrix-tc002")
         shutil.copyfile(a.build/"tc002-update", tree/"bin/tc002-update")
-        shutil.copyfile("build-upstream/webui/index.html", tree/"ui/awtrix.html")
+        shutil.copyfile("build-webui/index.html", tree/"ui/awtrix.html")
         shutil.copyfile("assets/cacert.pem", tree/"etc/cacert.pem")
         for path in (original, tree/"bin/awtrix-tc002", tree/"bin/tc002-update"):
             path.chmod(0o750)

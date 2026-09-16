@@ -34,7 +34,7 @@ def main():
         'bin/awtrix-tc002': binary,
         'try.py': (ROOT / 'tools/trial.py').read_bytes(),
         'README.md': (ROOT / 'docs/TRY-IT.md').read_bytes(),
-        'upstream/awtrix-ng/webui/index.html': (ROOT / 'build-upstream/webui/index.html').read_bytes(),
+        'upstream/awtrix-ng/webui/index.html': (ROOT / 'build-webui/index.html').read_bytes(),
         'assets/cacert.pem': (ROOT / 'assets/cacert.pem').read_bytes(),
         'LICENSE.md': (ROOT / 'LICENSE.md').read_bytes(),
         'THIRD-PARTY-NOTICES.md': (ROOT / 'THIRD-PARTY-NOTICES.md').read_bytes(),

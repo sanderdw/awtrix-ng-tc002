@@ -16,26 +16,36 @@ if(NOT TC002_UPSTREAM_RESULT EQUAL 0)
   message(FATAL_ERROR "tools/upstream.py apply failed; see the output above")
 endif()
 set(U ${CMAKE_CURRENT_SOURCE_DIR}/build-upstream)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/webui_brand.py)
+execute_process(COMMAND ${TC002_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tools/webui_brand.py
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} RESULT_VARIABLE TC002_WEBUI_RESULT)
+if(NOT TC002_WEBUI_RESULT EQUAL 0)
+  message(FATAL_ERROR "tools/webui_brand.py failed; see the output above")
+endif()
+# The clock's panel geometry, applied through the build-time knobs the patch series adds upstream.
+set(TC002_PANEL AWTRIX_MATRIX_HEIGHT=16 AWTRIX_PANEL_WIDTH=52 AWTRIX_GIF_MAX_W=52 AWTRIX_GIF_MAX_H=16
+  AWTRIX_SCRIPT_ICON_W=52 AWTRIX_SCRIPT_ICON_H=16)
 file(GLOB_RECURSE CORE CONFIGURE_DEPENDS ${U}/src/core/*.cpp ${U}/src/core/*.c)
 file(GLOB SIM CONFIGURE_DEPENDS ${U}/src/sim/*.cpp)
+list(FILTER SIM EXCLUDE REGEX "main_sim\\.cpp$")
+file(GLOB TC002 CONFIGURE_DEPENDS src/tc002/*.cpp)
 file(GLOB BERRY CONFIGURE_DEPENDS ${U}/lib/berry/src/*.c ${U}/lib/berry/default/*.c)
 add_library(berry STATIC ${BERRY})
 target_include_directories(berry PUBLIC ${U}/lib/berry/src ${U}/lib/berry ${U}/lib/berry/default)
-add_executable(awtrix-tc002 ${CORE} ${SIM}
+add_executable(awtrix-tc002 ${CORE} ${SIM} ${TC002}
   ${U}/src/sim/vendor/tjpgd/tjpgd.c
   ${U}/src/media/GifPlayer.cpp ${U}/src/media/MicroGif.cpp ${U}/src/media/ScriptIcon.cpp
   ${U}/src/persistence/DeviceConfigJson.cpp ${U}/src/persistence/SystemConfigApply.cpp
   ${U}/src/persistence/FsRestoreSink.cpp ${U}/src/system/Log.cpp
   ${U}/src/transport/ScriptMqttBridge.cpp ${U}/src/transport/mqtt/MqttService.cpp
   ${U}/src/transport/mqtt/MqttLink.cpp ${U}/src/transport/mqtt/HaAnnouncer.cpp
-  ${U}/src/transport/DeviceStateJson.cpp
   ${U}/src/transport/net/ArtnetService.cpp ${U}/src/transport/net/UdpSocket.cpp
-  vendor/PubSubClient/src/PubSubClient.cpp
-  src/Tc002Hardware.cpp src/Tc002Audio.cpp src/Tc002System.cpp src/Tc002Dns.cpp src/Tc002Mdns.cpp src/FirmwareImage.cpp)
-add_executable(tc002-update src/FirmwareUpdate.cpp src/FirmwareImage.cpp)
-target_include_directories(awtrix-tc002 PRIVATE src ${U}/src ${U}/src/sim/compat
-  vendor/base64/src vendor/PubSubClient/src)
-target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002
+  vendor/PubSubClient/src/PubSubClient.cpp src/updater/FirmwareImage.cpp)
+add_executable(tc002-update src/updater/FirmwareUpdate.cpp src/updater/FirmwareImage.cpp)
+# src/tc002/compat comes before upstream's sim/compat so the clock's WiFi and socket shims win.
+target_include_directories(awtrix-tc002 PRIVATE src/tc002 src/tc002/compat src/updater src/loader
+  ${U}/src ${U}/src/sim/compat vendor/base64/src vendor/PubSubClient/src)
+target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL}
   AWTRIX_NG_VERSION="1.1.0-tc002.8" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(awtrix-tc002 PRIVATE -Wall -Wextra -Wno-unused-parameter
   -ffunction-sections -fdata-sections)
@@ -61,33 +71,33 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_L
   message(FATAL_ERROR "Use GCC 9 or newer. The TC002 build is tested with Arm GNU 9.2-2019.12.")
 endif()
 install(TARGETS awtrix-tc002 RUNTIME DESTINATION bin)
-install(FILES ${U}/webui/index.html DESTINATION share/awtrix-tc002)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/build-webui/index.html DESTINATION share/awtrix-tc002)
 if(CMAKE_CROSSCOMPILING)
-  add_library(tc002-loader SHARED src/FlyThingsLoader.c)
+  add_library(tc002-loader SHARED src/loader/FlyThingsLoader.c)
   target_link_libraries(tc002-loader PRIVATE ${CMAKE_DL_LIBS})
   set_target_properties(tc002-loader PROPERTIES OUTPUT_NAME zkgui)
 endif()
 include(CTest)
 if(BUILD_TESTING)
   add_executable(test-loader tests/loader_test.c)
-  target_include_directories(test-loader PRIVATE src)
+  target_include_directories(test-loader PRIVATE src/loader)
   add_test(NAME tc002-loader COMMAND test-loader)
-  add_executable(test-dns tests/dns_test.cpp src/Tc002Dns.cpp)
-  target_include_directories(test-dns PRIVATE src ${U}/src ${U}/src/sim/compat)
-  target_compile_definitions(test-dns PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002)
+  add_executable(test-dns tests/dns_test.cpp src/tc002/Tc002Dns.cpp)
+  target_include_directories(test-dns PRIVATE src/tc002 ${U}/src ${U}/src/sim/compat)
+  target_compile_definitions(test-dns PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL})
   target_link_libraries(test-dns PRIVATE ${CMAKE_DL_LIBS})
   add_test(NAME tc002-dns COMMAND test-dns)
   add_executable(test-layout-render tests/layout_render.cpp
-    ${U}/src/core/apps/builtin/Tc002Layout.cpp
+    src/tc002/Tc002Layout.cpp
     ${U}/src/core/apps/ClockText.cpp ${U}/src/core/apps/SensorFormat.cpp
     ${U}/src/core/render/Canvas.cpp ${U}/src/core/render/TextRenderer.cpp
     ${U}/src/core/render/TextEncoding.cpp)
-  target_include_directories(test-layout-render PRIVATE ${U}/src)
-  target_compile_definitions(test-layout-render PRIVATE AWTRIX_TC002)
+  target_include_directories(test-layout-render PRIVATE src/tc002 ${U}/src)
+  target_compile_definitions(test-layout-render PRIVATE AWTRIX_TC002 ${TC002_PANEL})
   target_compile_options(test-layout-render PRIVATE -ffunction-sections -fdata-sections)
   target_link_options(test-layout-render PRIVATE -Wl,--gc-sections)
-  add_executable(test-tc002 tests/hardware_test.cpp src/Tc002Hardware.cpp)
-  target_include_directories(test-tc002 PRIVATE src ${U}/src)
+  add_executable(test-tc002 tests/hardware_test.cpp src/tc002/Tc002Hardware.cpp)
+  target_include_directories(test-tc002 PRIVATE src/tc002 ${U}/src)
   target_link_libraries(test-tc002 PRIVATE ${CMAKE_DL_LIBS})
   add_test(NAME tc002-hardware COMMAND test-tc002)
 endif()

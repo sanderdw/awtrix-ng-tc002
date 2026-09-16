@@ -2,9 +2,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
-#include "core/apps/builtin/TimeApp.h"
-#include "core/apps/builtin/DateApp.h"
-#include "core/apps/builtin/BatteryApp.h"
+#include "Tc002Layout.h"
+#include "core/apps/IApp.h"
 #include "media/AwtrixFontAdapter.h"
 
 int main(int argc, char** argv) {
@@ -17,23 +16,20 @@ int main(int argc, char** argv) {
   ctx.font = &awtrix::awtrixFont();
   ctx.settings = &settings;
   ctx.runtime = &runtime;
-  awtrix::TimeApp time;
-  awtrix::DateApp date;
-  awtrix::BatteryApp battery;
-  awtrix::IApp* app = nullptr;
+  bool (*layout)(awtrix::Canvas&, const awtrix::RenderCtx&) = nullptr;
   const std::string kind = argv[1];
   if (kind == "Time" && argc == 6) {
     ctx.hour = std::atoi(argv[2]); ctx.minute = std::atoi(argv[3]);
     ctx.mday = std::atoi(argv[4]); ctx.weekday = std::atoi(argv[5]);
-    app = &time;
+    layout = awtrix::tc002layout::time;
   } else if (kind == "Date" && argc == 6) {
     ctx.year = std::atoi(argv[2]); ctx.month = std::atoi(argv[3]);
     ctx.mday = std::atoi(argv[4]); ctx.weekday = std::atoi(argv[5]);
-    app = &date;
+    layout = awtrix::tc002layout::date;
   } else if (kind == "Battery" && argc == 3) {
-    runtime.batteryPercent = std::atoi(argv[2]); app = &battery;
+    runtime.batteryPercent = std::atoi(argv[2]); layout = awtrix::tc002layout::battery;
   }
-  if (!app || !app->renderNative(canvas, ctx)) return 3;
+  if (!layout || !layout(canvas, ctx)) return 3;
   std::cout << '[';
   for (std::size_t i = 0; i < canvas.size(); ++i) {
     if (i) std::cout << ',';

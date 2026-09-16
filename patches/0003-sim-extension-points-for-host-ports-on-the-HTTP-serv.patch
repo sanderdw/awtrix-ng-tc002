@@ -1,0 +1,132 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
+Date: Wed, 16 Sep 2026 16:19:35 +0200
+Subject: [PATCH 3/8] sim: extension points for host ports on the HTTP server
+
+SimHttpExtension lets a host port answer or gate requests ahead of routing,
+register its own routes before the catch-alls and adjust the invented device
+facts, without patching the server. runOnLoop is exposed for handlers that run
+on the listener thread. A failed asset write now answers 507 instead of 200.
+
+diff --git a/src/sim/SimHttpServer.cpp b/src/sim/SimHttpServer.cpp
+index 71aad9c..f680a39 100644
+--- a/src/sim/SimHttpServer.cpp
++++ b/src/sim/SimHttpServer.cpp
+@@ -96,7 +96,8 @@ class HostRestoreSink : public backup::FsRestoreSink {
+ // Every fact below is invented. The host has no radio, no battery gauge and no meaningful heap
+ // figures, but the web UI expects the same shape the device sends.
+ std::string simDeviceStateJson(CoreEngine& engine, const std::string& uid,
+-                               const std::string& hostname, bool scriptingRunning) {
++                               const std::string& hostname, bool scriptingRunning,
++                               const std::function<void(DeviceFacts&)>& adjust) {
+   DeviceFacts facts;
+   facts.boardType = "simulator";
+   facts.soc = pins::activeProfile().id;
+@@ -113,6 +114,7 @@ std::string simDeviceStateJson(CoreEngine& engine, const std::string& uid,
+   facts.hasHumidity = true;
+   facts.hasPressure = false;
+   facts.scriptingRunning = scriptingRunning;
++  if (adjust) adjust(facts);
+   return buildDeviceJson(engine, uid, facts);
+ }
+ 
+@@ -189,6 +191,7 @@ struct SimHttpServer::Impl {
+   SimHttpServer::ScriptSourceFn scriptSource;
+   SimHttpServer::ScriptSourceFn scriptStore;
+   SimHttpServer::StoredScriptsFn storedScripts;
++  SimHttpExtension ext;
+ 
+   // httplib answers on its own thread, but the engine is single-threaded. Every handler is queued
+   // here and blocks until tick() has run it on the main loop, so no route ever needs a lock.
+@@ -383,7 +386,10 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
+       }
+       std::error_code ec;
+       stdfs::create_directories(stdfs::u8path(sim::hostPath(target)).parent_path(), ec);
+-      sim::writeFile(sim::hostPath(target), f.content);
++      if (!sim::writeFile(sim::hostPath(target), f.content)) {
++        sendError(res, 507, "insufficientStorage", "could not write the file");
++        return;
++      }
+       logf("sim files: uploaded %s (%u B)", target.c_str(),
+            static_cast<unsigned>(f.content.size()));
+     }
+@@ -481,6 +487,7 @@ void SimHttpServer::Impl::handleSim(const httplib::Request& req, const std::stri
+ }
+ 
+ void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response& res) {
++  if (ext.route && ext.route(req, res)) return;
+   const std::string& path = req.path;
+   const api::MethodResolution resolved = api::resolveHttpMethod(
+       req.method, path,
+@@ -606,7 +613,7 @@ bool SimHttpServer::Impl::serveState(const httplib::Request& req, const std::str
+   if (path == "/api/v1/device") {
+     sendJson(res, 200, simDeviceStateJson(*engine, uid,
+                                           net::effectiveHostname(cfg->hostname, uid),
+-                                          scripts != nullptr));
++                                          scripts != nullptr, ext.deviceFacts));
+     return true;
+   }
+   if (path == "/api/v1/display") {
+@@ -744,6 +751,10 @@ void SimHttpServer::setScripts(const script::ScriptHost* host, ScriptSourceFn re
+   impl_->storedScripts = std::move(stored);
+ }
+ 
++void SimHttpServer::setExtension(SimHttpExtension ext) { impl_->ext = std::move(ext); }
++
++void SimHttpServer::runOnLoop(const std::function<void()>& fn) { impl_->runOnLoop(fn); }
++
+ bool SimHttpServer::begin(uint16_t port, CoreEngine& engine, SimBoard& board, Canvas& screen,
+                           const std::string& uid, DeviceConfig& cfg,
+                           const std::string& webuiFile) {
+@@ -757,6 +768,7 @@ bool SimHttpServer::begin(uint16_t port, CoreEngine& engine, SimBoard& board, Ca
+   im->port = port;
+ 
+   im->svr.set_default_headers({{"Access-Control-Allow-Origin", "*"}});
++  if (im->ext.configure) im->ext.configure(im->svr);
+ 
+   const auto marshal = [im](const httplib::Request& req, httplib::Response& res) {
+     im->runOnLoop([&] { im->route(req, res); });
+diff --git a/src/sim/SimHttpServer.h b/src/sim/SimHttpServer.h
+index 8473ac0..f86977b 100644
+--- a/src/sim/SimHttpServer.h
++++ b/src/sim/SimHttpServer.h
+@@ -12,12 +12,29 @@ namespace awtrix::script {
+ class ScriptHost;
+ }
+ 
++namespace httplib {
++struct Request;
++struct Response;
++class Server;
++}
++
+ namespace awtrix {
+ 
+ class CoreEngine;
+ class Canvas;
+ class SimBoard;
+ struct DeviceConfig;
++struct DeviceFacts;
++
++// Hooks for a host port (a Linux clock, say) to layer its own behaviour on this server without
++// patching it. route runs on the loop thread ahead of routing and returns true once it has
++// answered; configure runs once before the catch-all routes are registered, on the caller's
++// thread; deviceFacts adjusts the invented device facts before they are serialised.
++struct SimHttpExtension {
++  std::function<bool(const httplib::Request&, httplib::Response&)> route;
++  std::function<void(httplib::Server&)> configure;
++  std::function<void(DeviceFacts&)> deviceFacts;
++};
+ 
+ class SimHttpServer {
+  public:
+@@ -27,6 +44,9 @@ class SimHttpServer {
+   bool begin(uint16_t port, CoreEngine& engine, SimBoard& board, Canvas& screen,
+              const std::string& uid, DeviceConfig& cfg, const std::string& webuiFile);
+   void setCapabilitiesJson(std::string j);
++  void setExtension(SimHttpExtension ext);
++  // Runs fn on the main loop and waits for it, for an extension handler on the listener thread.
++  void runOnLoop(const std::function<void()>& fn);
+   void setOnConfigChanged(std::function<void()> cb);
+   void setOnAssetsChanged(std::function<void()> cb);
+   using ScriptSourceFn = std::function<bool(const std::string& name, std::string& out)>;

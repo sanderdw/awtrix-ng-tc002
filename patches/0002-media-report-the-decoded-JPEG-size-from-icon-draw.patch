@@ -1,0 +1,68 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
+Date: Wed, 16 Sep 2026 16:19:35 +0200
+Subject: [PATCH 2/8] media: report the decoded JPEG size from icon::draw
+
+Callers that place text next to an icon or blit it into a larger tile need the
+real dimensions; both renderers also refuse a JPEG larger than the canvas.
+
+diff --git a/src/media/IconRenderer.cpp b/src/media/IconRenderer.cpp
+index 6ae376f..a414fb6 100644
+--- a/src/media/IconRenderer.cpp
++++ b/src/media/IconRenderer.cpp
+@@ -26,7 +26,7 @@ bool jpgOutput(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
+ }
+ }
+ 
+-bool draw(Canvas& canvas, const std::string& iconId, int x, int y) {
++bool draw(Canvas& canvas, const std::string& iconId, int x, int y, int* width, int* height) {
+   media::PodBuffer<uint8_t> buf;
+   // Same convention as GifPlayer: anything longer than a plausible filename is inline base64.
+   if (iconId.size() > 64) {
+@@ -50,6 +50,10 @@ bool draw(Canvas& canvas, const std::string& iconId, int x, int y) {
+     }
+   }
+ 
++  uint16_t w = 0, h = 0;
++  if (TJpgDec.getJpgSize(&w, &h, buf.data(), buf.size()) != JDR_OK) return false;
++  if (width) *width = w;
++  if (height) *height = h;
+   s_canvas = &canvas;
+   TJpgDec.setJpgScale(1);
+   TJpgDec.setCallback(jpgOutput);
+diff --git a/src/media/IconRenderer.h b/src/media/IconRenderer.h
+index 9e71783..9f7308f 100644
+--- a/src/media/IconRenderer.h
++++ b/src/media/IconRenderer.h
+@@ -7,7 +7,7 @@
+ namespace awtrix {
+ namespace icon {
+ 
+-bool draw(Canvas& canvas, const std::string& iconId, int x, int y);
++bool draw(Canvas& canvas, const std::string& iconId, int x, int y, int* width = nullptr, int* height = nullptr);
+ 
+ }
+ }
+diff --git a/src/sim/SimIconRenderer.cpp b/src/sim/SimIconRenderer.cpp
+index 7e36d32..7b0105f 100644
+--- a/src/sim/SimIconRenderer.cpp
++++ b/src/sim/SimIconRenderer.cpp
+@@ -47,7 +47,7 @@ int jpgOut(JDEC* jd, void* bitmap, JRECT* rect) {
+ 
+ // Host half of icon::draw. The device goes through the Arduino TJpg_Decoder wrapper; here tjpgd is
+ // driven directly, and the two must agree on pixel placement or the sim lies about what you'd see.
+-bool draw(Canvas& canvas, const std::string& iconId, int x, int y) {
++bool draw(Canvas& canvas, const std::string& iconId, int x, int y, int* width, int* height) {
+   media::PodBuffer<uint8_t> buf;
+   // Longer than any legal icon name, so treat it as an inline base64 JPEG rather than a lookup.
+   if (iconId.size() > 64) {
+@@ -80,6 +80,9 @@ bool draw(Canvas& canvas, const std::string& iconId, int x, int y) {
+   JDEC jd;
+   uint8_t work[TJPGD_WORKSPACE_SIZE] __attribute__((aligned(4)));
+   if (jd_prepare(&jd, jpgIn, work, sizeof(work), &ctx) != JDR_OK) return false;
++  if (jd.width > canvas.width() || jd.height > canvas.height()) return false;
++  if (width) *width = jd.width;
++  if (height) *height = jd.height;
+   jd.swap = 0;
+   return jd_decomp(&jd, jpgOut, 0) == JDR_OK;
+ }

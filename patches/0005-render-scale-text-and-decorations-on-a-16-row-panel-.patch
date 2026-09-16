@@ -1,0 +1,497 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
+Date: Wed, 16 Sep 2026 16:19:35 +0200
+Subject: [PATCH 5/8] render: scale text and decorations on a 16-row panel
+ (AWTRIX_TC002)
+
+Fonts are expanded 2x so 32 by 8 layouts keep their proportions on 52 by 16;
+progress bars, status pixels, indicators and the icon gap scale with them, page
+icons may be any size up to the panel and classic 8-row art is doubled. Bar
+charts keep the upstream layout at scale 1. All of it is inert unless
+AWTRIX_TC002 makes displayTextScale() return 2.
+
+diff --git a/src/core/apps/SpecRenderer.cpp b/src/core/apps/SpecRenderer.cpp
+index 3da4e0e..c46ec05 100644
+--- a/src/core/apps/SpecRenderer.cpp
++++ b/src/core/apps/SpecRenderer.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include "core/StrCase.h"
+ #include "core/render/Color.h"
++#include "core/render/DisplayScale.h"
+ #include "core/render/Gfx2d.h"
+ #include "core/render/ScrollText.h"
+ #include "core/render/TextEncoding.h"
+@@ -18,7 +19,6 @@ namespace render {
+ namespace {
+ 
+ constexpr int kBaseline = kTextBaseline;
+-constexpr int kIconTextGap = 8;
+ 
+ std::string maybeUpper(const std::string& in, TextCase tc, bool globalUppercase) {
+   const bool up = (tc == TextCase::Upper) || (tc == TextCase::Inherit && globalUppercase);
+@@ -71,7 +71,7 @@ const ColorRamp* rampFor(const AppSpecExtras& x, bool wanted) {
+ }
+ 
+ void renderProgress(Canvas& c, const AppSpec& s, int iconWidth) {
+-  const int x0 = iconWidth > 0 ? kIconTextGap : 0;
++  const int x0 = iconWidth;
+   const AppSpecExtras& x = s.extras();
+   const ColorSource fill(x.progressColor, rampFor(x, x.progressUsesPalette));
+   drawProgress(c, x.progress, fill, x.progressTrackColor, x0);
+@@ -136,7 +136,7 @@ void renderText(Canvas& c, const AppSpec& s, const GfxFont& font, uint32_t color
+     paint.glyphCount = fragColors.size();
+   }
+ 
+-  drawScrollRun(c, font, x, kBaseline, hasFragments ? fragRun : textStr, total, paint, r.scroll);
++  drawScrollRun(c, font, x, kBaseline * displayTextScale(c.height()), hasFragments ? fragRun : textStr, total, paint, r.scroll);
+ }
+ 
+ }
+@@ -161,11 +161,11 @@ void renderSpec(Canvas& c, const AppSpec& s, const GfxFont& font, const SpecRend
+   }
+   const uint32_t textColor = s.hasTextColor ? s.textColor : r.defaultTextColor;
+   if (s.textInFront) {
+-    renderDecorations(c, s, font, textColor, r.iconWidth);
++    renderDecorations(c, s, r.drawFont ? *r.drawFont : font, textColor, r.iconWidth);
+     renderText(c, s, font, textColor, r);
+   } else {
+     renderText(c, s, font, textColor, r);
+-    renderDecorations(c, s, font, textColor, r.iconWidth);
++    renderDecorations(c, s, r.drawFont ? *r.drawFont : font, textColor, r.iconWidth);
+   }
+   // Dark red frame marks an app that outlived its lifetime and was kept rather than removed.
+   if (s.lifeTimeEnd) c.drawRect(0, 0, c.width(), c.height(), 0x6e0700u);
+diff --git a/src/core/apps/SpecRenderer.h b/src/core/apps/SpecRenderer.h
+index 4ef3285..b1dad71 100644
+--- a/src/core/apps/SpecRenderer.h
++++ b/src/core/apps/SpecRenderer.h
+@@ -12,6 +12,7 @@ namespace awtrix {
+ namespace render {
+ 
+ struct SpecRender {
++  const GfxFont* drawFont = nullptr;
+   uint32_t defaultTextColor = 0xFFFFFFu;
+   int iconWidth = 0;
+   int64_t nowMs = 0;
+diff --git a/src/core/render/DisplayScale.h b/src/core/render/DisplayScale.h
+new file mode 100644
+index 0000000..be50fcd
+--- /dev/null
++++ b/src/core/render/DisplayScale.h
+@@ -0,0 +1,16 @@
++#pragma once
++
++namespace awtrix {
++
++// Text and thin decorations are drawn twice as large on a 16-row panel so the 32 by 8 layouts keep
++// their proportions. Explicit drawing coordinates remain physical pixels.
++inline int displayTextScale(int height) {
++#ifdef AWTRIX_TC002
++  return height >= 16 ? 2 : 1;
++#else
++  (void)height;
++  return 1;
++#endif
++}
++
++}
+diff --git a/src/core/render/Gfx2d.cpp b/src/core/render/Gfx2d.cpp
+index 06c40ae..4e0ad8c 100644
+--- a/src/core/render/Gfx2d.cpp
++++ b/src/core/render/Gfx2d.cpp
+@@ -1,3 +1,4 @@
++#include "core/render/DisplayScale.h"
+ #include "core/render/Gfx2d.h"
+ 
+ #include <algorithm>
+@@ -45,27 +46,48 @@ void drawProgress(Canvas& c, int pct, const ColorSource& fill, uint32_t track, i
+   const int filled = (prog * w) / 100;
+   const float span = static_cast<float>(w > 1 ? w - 1 : 1);
+   for (int x = 0; x < w; ++x)
+-    c.setPixel(x0 + x, y, x < filled ? fill.at(static_cast<float>(x) / span) : track);
++    c.fillRect(x0 + x, y - displayTextScale(c.height()) + 1, 1, displayTextScale(c.height()),
++               x < filled ? fill.at(static_cast<float>(x) / span) : track);
+ }
+ 
+ void drawBars(Canvas& c, const std::vector<int>& values, const ColorSource& color, bool autoscale,
+               int x0) {
+-  const int n = static_cast<int>(chartCount(values));
+-  if (n == 0) return;
+-  const ChartRange range = chartRange(values, n, autoscale);
++  const int count = static_cast<int>(chartCount(values));
+   const int avail = c.width() - x0;
+-  const int barW = std::max(1, (avail - (n - 1)) / n);
+-  const auto level = [&](int v) {
++  const int scale = displayTextScale(c.height());
++  const auto level = [&](const ChartRange& range, int v) {
+     const int l = ((v - range.min) * c.height()) / range.span();
+     return std::min(std::max(l, 0), c.height());
+   };
+-  // Bars grow away from wherever zero lands, so negative values hang below the baseline.
+-  const int zero = level(0);
++  if (scale == 1) {
++    const int n = count;
++    if (n == 0) return;
++    const ChartRange range = chartRange(values, n, autoscale);
++    const int barW = std::max(1, (avail - (n - 1)) / n);
++    // Bars grow away from wherever zero lands, so negative values hang below the baseline.
++    const int zero = level(range, 0);
++    for (int i = 0; i < n; ++i) {
++      const int l = level(range, values[i]);
++      const int top = c.height() - std::max(l, zero);
++      const int h = std::abs(l - zero);
++      c.fillRect(x0 + i * (barW + 1), top, barW, h, color.at(chartT(values[i], range)));
++    }
++    return;
++  }
++  // On a scaled panel bars share the width proportionally, with a scaled gap, and a series wider
++  // than the panel is resampled so its last value always stays visible.
++  const int n = std::min(count, avail);
++  if (n <= 0) return;
++  const ChartRange range = chartRange(values, count, autoscale);
++  const int zero = level(range, 0);
+   for (int i = 0; i < n; ++i) {
+-    const int l = level(values[i]);
++    const int sample = n > 1 ? i * (count - 1) / (n - 1) : count - 1;
++    const int l = level(range, values[sample]);
+     const int top = c.height() - std::max(l, zero);
+     const int h = std::abs(l - zero);
+-    c.fillRect(x0 + i * (barW + 1), top, barW, h, color.at(chartT(values[i], range)));
++    const int left = i * avail / n, right = (i + 1) * avail / n;
++    const int gap = i + 1 < n ? std::min(scale, right - left - 1) : 0;
++    c.fillRect(x0 + left, top, right - left - gap, h, color.at(chartT(values[sample], range)));
+   }
+ }
+ 
+diff --git a/src/core/render/RenderPipeline.cpp b/src/core/render/RenderPipeline.cpp
+index d998fdc..9c65d81 100644
+--- a/src/core/render/RenderPipeline.cpp
++++ b/src/core/render/RenderPipeline.cpp
+@@ -7,6 +7,7 @@
+ #include "core/CoreEngine.h"
+ #include "core/apps/SpecRenderer.h"
+ #include "core/render/StatusPixels.h"
++#include "core/render/DisplayScale.h"
+ #include "core/render/TransitionComposer.h"
+ 
+ namespace awtrix {
+@@ -15,8 +16,6 @@ using render::drawLinkStatus;
+ using render::pulse;
+ 
+ namespace {
+-// Icons are 8 px wide; text starts one column further right.
+-constexpr int kIconWidth = 9;
+ const std::string kNoIcon;
+ constexpr long kDefaultTransMs = 1000;
+ constexpr long kIconRetryMs = 5000;
+@@ -24,6 +23,8 @@ constexpr long kIconRetryMs = 5000;
+ 
+ RenderPipeline::RenderPipeline(int width, int height, const RenderPipelineDeps& deps)
+     : d_(deps), width_(width), height_(height) {
++  for (int i = 0; i < kFontCount; ++i)
++    if (d_.fonts[i]) scaledFonts_[i].reset(*d_.fonts[i], displayTextScale(height));
+   slotA_.icon = d_.icons;
+   slotB_.icon = d_.iconsB;
+ }
+@@ -50,9 +51,13 @@ bool RenderPipeline::iconIsFullScreen(const PageSlot* slot, int canvasWidth) con
+   return slot && slot->valid && slot->icon && slot->icon->width() >= canvasWidth;
+ }
+ 
+-// How far left the icon is dragged by scrolling text. The icon rides along with the text until it
+-// has been pushed a full icon width off the left edge, then stays there.
++int RenderPipeline::iconColumns(const PageSlot& slot) const {
++  return slot.valid && slot.icon ? std::min(width_, slot.icon->width() + displayTextScale(height_)) : 0;
++}
++
++// The icon rides with scrolling text until it is completely off the left edge.
+ int RenderPipeline::iconShift(const AppSpec& spec, const PageSlot& slot) const {
++  const int kIconWidth = iconColumns(slot);
+   if (spec.iconMode == IconMode::Fixed || spec.icon.empty()) return 0;
+   if (slot.iconPushed && spec.iconMode == IconMode::PushOnce) return -kIconWidth;
+   const float tx = slot.scroll.x();
+@@ -80,7 +85,8 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+     const bool fullScreen = iconIsFullScreen(slot, dst.width());
+     render::SpecRender r;
+     r.defaultTextColor = s.textColor;
+-    r.iconWidth = (spec.icon.empty() || !(slot && slot->valid) || fullScreen) ? 0 : kIconWidth;
++    r.drawFont = d_.fonts[static_cast<uint8_t>(spec.font) < kFontCount ? static_cast<uint8_t>(spec.font) : 0];
++    r.iconWidth = (spec.icon.empty() || !(slot && slot->valid) || fullScreen) ? 0 : iconColumns(*slot);
+     r.backgroundDrawn = fullScreen;
+     r.nowMs = nowMs;
+     r.textX = slot ? slot->scroll.x() : 0.0f;
+@@ -92,7 +98,10 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+     es.hasSpeed = spec.extras().hasEffectSpeed;
+     es.ramp = spec.extras().palette;
+     if (r.effect) r.effect->setSettings(es);
+-    if (fullScreen) slot->icon->blit(dst, 0);
++    if (fullScreen) {
++      dst.clear(spec.hasBackgroundColor ? spec.backgroundColor : 0x000000u);
++      slot->icon->blit(dst, 0);
++    }
+     render::renderSpec(dst, spec, fontFor(&spec), r);
+     if (r.iconWidth && slot && slot->valid)
+       slot->icon->blit(dst, spec.iconOffsetX + iconShift(spec, *slot));
+@@ -108,7 +117,7 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+     RenderCtx ctx;
+     ctx.settings = &s;
+     ctx.runtime = &rt;
+-    ctx.font = &fontFor(nullptr);
++    ctx.font = d_.fonts[0];
+     ctx.fonts[0] = d_.fonts[0];
+     ctx.fonts[1] = d_.fonts[1];
+     d_.clock->fill(ctx, nowMs);
+@@ -124,21 +133,21 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+ const GfxFont& RenderPipeline::fontFor(const AppSpec* spec) const {
+   const uint8_t i = static_cast<uint8_t>(spec ? spec->font : FontId::Small);
+   const GfxFont* f = i < kFontCount ? d_.fonts[i] : nullptr;
+-  return *(f ? f : d_.fonts[0]);
++  return scaledFonts_[f ? i : 0].font();
+ }
+ 
+ render::ScrollLayout RenderPipeline::scrollLayoutFor(const AppSpec* spec, int canvasWidth,
+-                                                    bool iconReservesColumn) const {
++                                                    int iconColumns) const {
+   render::ScrollLayout layout;
+   layout.canvasWidth = canvasWidth;
+   layout.availWidth = canvasWidth;
+   if (!spec) return layout;
+ 
+   const Settings& s = d_.engine->state().settings();
+-  const bool hasIcon = !spec->icon.empty() && iconReservesColumn;
++  const bool hasIcon = !spec->icon.empty() && iconColumns > 0;
+   layout.text = render::textMetricsFor(*spec, fontFor(spec), s.uppercase);
+-  layout.startX = hasIcon ? kIconWidth : 0;
+-  layout.availWidth = canvasWidth - (hasIcon ? kIconWidth : 0);
++  layout.startX = hasIcon ? iconColumns : 0;
++  layout.availWidth = canvasWidth - (hasIcon ? iconColumns : 0);
+   layout.textOffset = spec->textOffsetX;
+   return layout;
+ }
+@@ -146,7 +155,7 @@ render::ScrollLayout RenderPipeline::scrollLayoutFor(const AppSpec* spec, int ca
+ void RenderPipeline::applyScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs) {
+   const bool iconReservesColumn = slot.valid && !iconIsFullScreen(&slot, width_);
+   slot.scroll.set(spec ? spec->scroll : ScrollSpec{}, d_.engine->state().settings().scrollDefaults,
+-                  scrollLayoutFor(spec, width_, iconReservesColumn), nowMs);
++                  scrollLayoutFor(spec, width_, iconReservesColumn ? iconColumns(slot) : 0), nowMs);
+ }
+ 
+ int RenderPipeline::scrollParkAfter(const AppSpec* spec, bool isNotif) const {
+@@ -192,9 +201,10 @@ void RenderPipeline::playPageSound(const AppSpec& spec) {
+ // and bottom corner.
+ void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
+   const RuntimeState& rt = d_.engine->state().runtime();
+-  const int right = out.width() - 1;
+-  const int bottom = out.height() - 1;
+-  const int mid = out.height() / 2;
++  const int scale = displayTextScale(out.height());
++  const int right = out.width() / scale - 1;
++  const int bottom = out.height() / scale - 1;
++  const int mid = out.height() / scale / 2;
+   struct Shape {
+     int count;
+     int px[3][2];
+@@ -210,7 +220,7 @@ void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
+     if (ind.blinkMs > 0 && ((nowMs / ind.blinkMs) & 1L)) continue;
+     const uint32_t rgb = pulse(ind.color, nowMs, ind.fadeMs);
+     for (int p = 0; p < shapes[i].count; ++p)
+-      out.setPixel(shapes[i].px[p][0], shapes[i].px[p][1], rgb);
++      out.fillRect(shapes[i].px[p][0] * scale, shapes[i].px[p][1] * scale, scale, scale, rgb);
+   }
+ }
+ 
+diff --git a/src/core/render/RenderPipeline.h b/src/core/render/RenderPipeline.h
+index 7950154..e169f62 100644
+--- a/src/core/render/RenderPipeline.h
++++ b/src/core/render/RenderPipeline.h
+@@ -11,6 +11,7 @@
+ #include "core/payload/AppSpec.h"
+ #include "core/render/Canvas.h"
+ #include "core/render/Font.h"
++#include "core/render/ScaledFont.h"
+ #include "core/render/ScrollController.h"
+ #include "core/sound/NotificationSound.h"
+ 
+@@ -78,7 +79,7 @@ class RenderPipeline {
+   const GfxFont& fontFor(const AppSpec* spec) const;
+ 
+   render::ScrollLayout scrollLayoutFor(const AppSpec* spec, int canvasWidth,
+-                                       bool iconReservesColumn) const;
++                                       int iconColumns) const;
+   void applyScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs);
+   void advanceScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs, int parkAfter);
+   int scrollParkAfter(const AppSpec* spec, bool isNotif) const;
+@@ -86,9 +87,11 @@ class RenderPipeline {
+   bool iconIsFullScreen(const PageSlot* slot, int canvasWidth) const;
+   const AppSpec* pageSpec(const std::string& id, bool isNotif) const;
+   int iconShift(const AppSpec& spec, const PageSlot& slot) const;
++  int iconColumns(const PageSlot& slot) const;
+ 
+   RenderPipelineDeps d_;
+   int width_, height_;
++  ScaledFont scaledFonts_[kFontCount];
+   std::unique_ptr<Canvas> transA_, transB_;
+   std::string lastRenderId_;
+   PageSlot slotA_, slotB_;
+diff --git a/src/core/render/ScaledFont.h b/src/core/render/ScaledFont.h
+new file mode 100644
+index 0000000..444faa9
+--- /dev/null
++++ b/src/core/render/ScaledFont.h
+@@ -0,0 +1,52 @@
++#pragma once
++
++#include <algorithm>
++#include <vector>
++#include "core/render/Font.h"
++
++namespace awtrix {
++
++// Own the expanded bitmaps so every text measurement, scroll bound and renderer
++// sees the same metrics, including accented glyphs in sparse Unicode ranges.
++class ScaledFont {
++ public:
++  void reset(const GfxFont& source, int scale) {
++    font_ = source;
++    bitmap_.clear();
++    glyphs_.clear();
++    int count = source.last - source.first + 1;
++    for (int r = 0; r < source.rangeCount; ++r) {
++      const auto& range = source.ranges[r];
++      for (int c = 0; c <= range.last - range.first; ++c)
++        count = std::max(count, static_cast<int>(range.index[c]));
++    }
++    for (int i = 0; i < count; ++i) {
++      const auto& g = source.glyphs[i];
++      FontGlyph out = g;
++      out.bitmapOffset = bitmap_.size();
++      out.width *= scale; out.height *= scale; out.xAdvance *= scale;
++      out.xOffset *= scale; out.yOffset *= scale;
++      const auto start = bitmap_.size();
++      bitmap_.resize(start + (out.width * out.height + 7) / 8, 0);
++      for (int y = 0; y < out.height; ++y)
++        for (int x = 0; x < out.width; ++x) {
++          const int bit = (y / scale) * g.width + x / scale;
++          if (source.bitmap[g.bitmapOffset + bit / 8] & (0x80 >> (bit % 8))) {
++            const int dest = y * out.width + x;
++            bitmap_[start + dest / 8] |= 0x80 >> (dest % 8);
++          }
++        }
++      glyphs_.push_back(out);
++    }
++    font_.yAdvance *= scale;
++    font_.bitmap = bitmap_.data();
++    font_.glyphs = glyphs_.data();
++  }
++  const GfxFont& font() const { return font_; }
++ private:
++  GfxFont font_{};
++  std::vector<uint8_t> bitmap_;
++  std::vector<FontGlyph> glyphs_;
++};
++
++}
+diff --git a/src/core/render/StatusPixels.cpp b/src/core/render/StatusPixels.cpp
+index e62afda..3387a5a 100644
+--- a/src/core/render/StatusPixels.cpp
++++ b/src/core/render/StatusPixels.cpp
+@@ -1,3 +1,4 @@
++#include "core/render/DisplayScale.h"
+ #include "core/render/StatusPixels.h"
+ 
+ #include <cmath>
+@@ -31,11 +32,12 @@ uint32_t pulse(uint32_t rgb, int64_t nowMs, uint32_t periodMs) {
+ 
+ void drawLinkStatus(Canvas& out, const net::LinkStatus& wifi, const net::LinkStatus& mqtt,
+                     int64_t nowMs) {
+-  if (isDown(wifi)) out.setPixel(0, 0, pulse(kWifiColor, nowMs, kPulseMs));
++  const int scale = displayTextScale(out.height());
++  if (isDown(wifi)) out.fillRect(0, 0, scale, scale, pulse(kWifiColor, nowMs, kPulseMs));
+   // MQTT sitting offline because the Wi-Fi is down is not a second fault - it is the same outage,
+   // and the Wi-Fi pixel already reports it. One dot lit always means one thing to go and fix.
+   if (isDown(mqtt) && mqtt.error != net::LinkError::NoWifi)
+-    out.setPixel(0, out.height() - 1, pulse(kMqttColor, nowMs, kPulseMs));
++    out.fillRect(0, out.height() - scale, scale, scale, pulse(kMqttColor, nowMs, kPulseMs));
+ }
+ 
+ }
+diff --git a/src/media/DevicePageIcon.h b/src/media/DevicePageIcon.h
+index 35cc065..6745404 100644
+--- a/src/media/DevicePageIcon.h
++++ b/src/media/DevicePageIcon.h
+@@ -1,47 +1,57 @@
+ #pragma once
+ 
+-#include <cstdint>
+-
++#include <algorithm>
+ #include "core/render/Canvas.h"
+ #include "core/render/RenderPipeline.h"
+ #include "media/GifPlayer.h"
+ #include "media/IconRenderer.h"
++#include "media/MicroGif.h"
+ 
+ namespace awtrix {
+ 
+ class DevicePageIcon : public IPageIcon {
+  public:
+-  // Icon ids carry no extension, so try GIF first and fall back to JPG. A GIF may be wider than
+-  // 8 px and sets the page's icon width accordingly; a JPG is always 8x8.
+   bool begin(const std::string& iconId) override {
+-    buf_.clear(0x000000u);
+-    width_ = 0;
+-    if (gif_.open(iconId, false, 1) ==
+-        GifPlayer::OpenResult::kGood) {
+-      width_ = gif_.width();
+-      return true;
++    clear();
++    buf_.clear();
++    if (gif_.open(iconId, false, 1) == GifPlayer::OpenResult::kGood) {
++      sourceWidth_ = gif_.width();
++      sourceHeight_ = gif_.height();
++    } else if (!icon::draw(buf_, iconId, 0, 0, &sourceWidth_, &sourceHeight_)) {
++      return false;
++    }
++    width_ = sourceWidth_;
++    height_ = sourceHeight_;
++#ifdef AWTRIX_TC002
++    // Classic tiles grow to 16x16; classic full-screen art fits the 52x16 panel.
++    // Native assets keep every source pixel, including full-screen 52x16 GIFs.
++    if (sourceHeight_ <= 8) {
++      width_ = std::min(52, sourceWidth_ * 2);
++      height_ = sourceHeight_ * 2;
+     }
+-    if (!icon::draw(buf_, iconId, 0, 0)) return false;
+-    width_ = 8;
+-    return true;
++#endif
++    return width_ > 0 && height_ > 0;
+   }
+   void clear() override {
+     gif_.close();
+-    width_ = 0;
++    width_ = height_ = sourceWidth_ = sourceHeight_ = 0;
+   }
+   void advance(int64_t nowMs) override {
+     if (gif_.active()) gif_.render(buf_, nowMs);
+   }
+   void blit(Canvas& dst, int xOffset) const override {
+-    for (int y = 0; y < 8; ++y)
+-      for (int x = 0; x < width_; ++x) dst.setPixel(x + xOffset, y, buf_.getPixel(x, y));
++    const int top = (dst.height() - height_) / 2;
++    for (int y = 0; y < height_; ++y)
++      for (int x = 0; x < width_; ++x)
++        dst.setPixel(x + xOffset, y + top,
++          buf_.getPixel(x * sourceWidth_ / width_, y * sourceHeight_ / height_));
+   }
+   int width() const override { return width_; }
+ 
+  private:
+-  Canvas buf_{32, 8};
++  Canvas buf_{media::MicroGif::kMaxW, media::MicroGif::kMaxH};
+   GifPlayer gif_;
+-  int width_ = 0;
++  int width_ = 0, height_ = 0, sourceWidth_ = 0, sourceHeight_ = 0;
+ };
+ 
+ }

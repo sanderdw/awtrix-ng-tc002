@@ -16,7 +16,7 @@ if 'exists' in device('shell','if [ -f /tmp/EasyUI.cfg ]; then echo exists; fi')
     p.error('an EasyUI test override already exists; finish that trial first')
 device('shell','mkdir -p /tmp/awtrix-bundle/bin /tmp/awtrix-bundle/lib /tmp/awtrix-bundle/ui')
 for source,target in [('dist/bin/awtrix-tc002','bin/awtrix-tc002'),('dist/bin/libzkgui.so','lib/libzkgui.so'),
-    ('build-upstream/webui/index.html','ui/awtrix.html'),('assets/cacert.pem','cacert.pem')]:
+    ('build-webui/index.html','ui/awtrix.html'),('assets/cacert.pem','cacert.pem')]:
     device('push',source,'/tmp/awtrix-bundle/'+target)
 with tempfile.TemporaryDirectory() as tmp:
     original=Path(tmp)/'original.cfg'; device('pull','/res/etc/EasyUI.cfg',str(original))

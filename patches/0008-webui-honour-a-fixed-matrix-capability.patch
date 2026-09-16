@@ -1,0 +1,221 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
+Date: Wed, 16 Sep 2026 16:19:35 +0200
+Subject: [PATCH 8/8] webui: honour a fixed-matrix capability
+
+When capabilities report a fixed matrix, the GPIO, panel and sensor fields are
+hidden, the live preview and icon limits follow the reported size, the icon
+editor offers matching presets and firmware uploads accept .img files.
+
+diff --git a/webui/index.html b/webui/index.html
+index 6bf5ead..a828c7d 100644
+--- a/webui/index.html
++++ b/webui/index.html
+@@ -163,7 +163,7 @@ main>.wide{grid-column:1/-1}
+ .ic{width:13px;height:13px;flex:none;stroke:currentColor;fill:none;stroke-width:2;
+   stroke-linecap:round;stroke-linejoin:round}
+ .hero{grid-column:1/-1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+-canvas#screen{display:block;width:100%;aspect-ratio:4/1;image-rendering:pixelated;background:#000}
++canvas#screen{display:block;width:100%;aspect-ratio:52/16;image-rendering:pixelated;background:#000}
+ .hctl{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--border);flex-wrap:wrap}
+ .hctl .lab{font-size:var(--f1);color:var(--dim)}
+ .hctl input[type=range]{flex:1;min-width:110px;width:auto}
+@@ -774,7 +774,7 @@ const I18N={en:{
+   bkCaptiveHint:'The Wi‑Fi sign‑in popup can’t upload files. To restore, open this page in a browser:',
+   bkRestored:'Backup restored',bkWarnings:'warning(s)',bkRebootQ:'Restore applied. Reboot now to use it?',
+   storage:'Storage',of:'of',free:'free',
+-  iconshelp:'8×8 to 32×8 PNG, JPG or animated GIF. Drag & drop files here or click to choose.',
++  iconshelp:'16×16 icons or images up to 52×16 (PNG, JPG or animated GIF). Existing 8×8 icons display at 16×16 automatically. Drag & drop files here or click to choose.',
+   editorTab:'Icon Editor',
+   edLoading:'Loading the editor…',
+   edUnreachable:'The editor did not load.',
+@@ -925,7 +925,7 @@ const I18N={en:{
+   bkCaptiveHint:'Der WLAN-Anmelde-Dialog kann keine Dateien hochladen. Zum Wiederherstellen diese Seite im Browser öffnen:',
+   bkRestored:'Sicherung wiederhergestellt',bkWarnings:'Warnung(en)',bkRebootQ:'Wiederhergestellt. Jetzt neu starten?',
+   storage:'Speicher',of:'von',free:'frei',
+-  iconshelp:'8×8 bis 32×8 PNG, JPG oder animiertes GIF. Dateien hierher ziehen oder klicken zum Auswählen.',
++  iconshelp:'16×16 Icons oder Bilder bis 52×16 (PNG, JPG oder animiertes GIF). Vorhandene 8×8 Icons werden automatisch auf 16×16 vergrößert. Dateien hierher ziehen oder klicken zum Auswählen.',
+   editorTab:'Icon-Editor',
+   edLoading:'Editor wird geladen…',
+   edUnreachable:'Der Editor wurde nicht geladen.',
+@@ -1320,6 +1320,14 @@ const SOUND_KEYS=Object.keys(SYSF).filter(k=>SYSF[k].api==='settings');
+ const S={transitions:[],stats:null,ap:false,sysHost:'',sysUid:'',gpio:null,aud:null,
+   scriptMax:0,scriptsOff:null};
+ function readAudioCaps(caps){
++  S.matrix=caps.matrix||null;
++  if(caps.gpio?.soc==='ssd202d'){
++    for(const key of ['autoBrightness','useCelsius','temperatureColor','humidityColor'])
++      FIELDS[key].g='hidden';
++    for(const key of ['minBrightness','maxBrightness','tempDecimals','buttonCallback'])
++      SYSF[key].g='hidden';
++    FIELDS.brightness.h='Sets the display brightness.|Stellt die Display-Helligkeit ein.';
++  }
+   const a=caps.audio||{};
+   S.aud={buzzer:a.buzzer===true,track:a.track===true,mp3:a.mp3===true,radio:a.radio===true};
+ }
+@@ -1334,6 +1342,14 @@ async function scriptsOff(){
+   return S.scriptsOff;
+ }
+ function applyGpioCaps(c){
++  if(c.fixed){
++    for(const [key,field] of Object.entries(SYSF))
++      if(field.g==='gpio'||['panelWidth','panels','panelStart','panelWiring','panelSerpentine',
++        'panelChainReverse','panelChainSerpentine','dfplayer','tempOffset','humOffset',
++        'batteryDividerRatio','ldrFactor','ldrGamma','ldrOnGround','brightnessSmoothing'].includes(key))
++        field.g='hidden';
++    return;
++  }
+   const dflt=c.defaults||{};
+   const gp=p=>'GPIO '+p;
+   const inR=(rs,p)=>(rs||[]).some(r=>p>=r[0]&&p<=r[1]);
+@@ -1795,12 +1811,13 @@ function gifEncode(frames,W,H,SC){
+   return new Uint8Array(b);
+ }
+ const gifGap=SC=>SC>1?Math.max(1,Math.round(SC/10)):0;
+-const ICON_MAX=32;
++const ICON_MAX=52,ICON_MAX_HEIGHT=16;
++const ICON_SIZES=['16x16','52x16','8x8','32x8'];
+ async function imgToGif(src,tw,th){
+   const bmp=(typeof ImageBitmap!=='undefined'&&src instanceof ImageBitmap)?src:await createImageBitmap(src);
+   const w=tw||bmp.width,h=th||bmp.height;
+   const cv=el('canvas',{width:w,height:h}),g=cv.getContext('2d');
+-  g.imageSmoothingEnabled=w!==bmp.width||h!==bmp.height;
++  g.imageSmoothingEnabled=false;
+   g.drawImage(bmp,0,0,w,h);
+   if(bmp.close)bmp.close();
+   const d=g.getImageData(0,0,w,h).data,px=[];
+@@ -1816,7 +1833,7 @@ async function iconAsGif(file,name){
+     const bmp=await createImageBitmap(file);
+     const w=bmp.width,h=bmp.height;
+     if(bmp.close)bmp.close();
+-    if(w>ICON_MAX||h>ICON_MAX)return null;
++    if(w>ICON_MAX||h>ICON_MAX_HEIGHT)return null;
+     return{blob:await imgToGif(file),name:String(name).replace(/\.[^.]+$/,'')+'.gif'};
+   }catch(e){return null;}
+ }
+@@ -1876,9 +1893,10 @@ function vitalTile(d){
+ const metaItem=(k,v,cls)=>el('span',null,k+' ',el('b',cls?{class:cls}:null,String(v)));
+ function viewDash(view){
+   const SC=10;
+-  const cv=el('canvas',{id:'screen',width:32*SC,height:8*SC,role:'img','aria-label':t('livepre')});
++  const cv=el('canvas',{id:'screen',width:52*SC,height:16*SC,role:'img','aria-label':t('livepre')});
+   const ctx=cv.getContext('2d');
+-  let pw=32,ph=8;
++  cv.style.aspectRatio='52/16';
++  let pw=52,ph=16;
+   const bri=el('input',{type:'range',min:0,max:255,value:S.stats?S.stats.brightness:120,
+     'aria-label':t('brightness')});
+   const briVal=el('span',{class:'val'},String(S.stats?S.stats.brightness:120));
+@@ -1926,7 +1944,7 @@ function viewDash(view){
+     const{data}=await api('/api/v1/display/screen',{timeout:4000});
+     const px=data&&data.pixels;
+     if(!Array.isArray(px))return;
+-    const W=data.width||32,H=data.height||8;
++    const W=data.width||52,H=data.height||16;
+     if(W!==pw||H!==ph){cv.width=W*SC;cv.height=H*SC;cv.style.aspectRatio=W+'/'+H;pw=W;ph=H;}
+     shot=px;
+     if(rec){
+@@ -2243,7 +2261,7 @@ class MyApp
+ 
+   def draw()           # every frame while visible
+     clear()
+-    # the matrix is 32x8; y is the text BASELINE
++    # the matrix is 52x16; coordinates are physical pixels; y is the text BASELINE
+     text(1, 6, "n=" + str(self.n), 0x00A0FF)
+   end
+ end
+@@ -3062,6 +3080,10 @@ function systemPage(view,data){
+     data.tzName=TZFIRST.get(data.tz)||'UTC';
+   const page=systemSettingsPage(view,data);
+   const sysFields=renderSettingsInto(page,data,SYSF,SYS_GROUPS);
++  if(S.matrix&&S.matrix.fixed)
++    page.section('matrix',t('pnSize'),null,[actionRow('TC002',null,[
++      el('div',{class:'badge good'},S.matrix.width+' × '+S.matrix.height+' = '+
++        (S.matrix.width*S.matrix.height)+' '+t('pnLeds'))])]);
+   advancedSection(page,data,SYSF);
+   if(sysFields.hostname&&S.sysHost)
+     sysFields.hostname.row.querySelector('input').placeholder=S.sysHost;
+@@ -3150,7 +3172,7 @@ function progressRow(){
+     set(p){fill.style.width=(p*100).toFixed(1)+'%';}};
+ }
+ function maintenanceSection(page){
+-  const fwIn=el('input',{type:'file',accept:'.bin'});
++  const fwIn=el('input',{type:'file',accept:S.matrix&&S.matrix.fixed?'.img':'.bin'});
+   const fwBtn=el('button',null,t('choose'));
+   const fw=progressRow();
+   fwBtn.addEventListener('click',()=>fwIn.click());
+@@ -3179,7 +3201,7 @@ function maintenanceSection(page){
+   });
+   const ver=S.stats&&S.stats.version;
+   page.section('maint',t('maint'),t('mainthelp'),[
+-    actionRow(t('fwfile'),ver?t('version')+' '+ver:null,[fwBtn,fwIn]),
++    actionRow(S.matrix&&S.matrix.fixed?t('fwfile').replace('.bin','.img'):t('fwfile'),ver?t('version')+' '+ver:null,[fwBtn,fwIn]),
+     fw.row,
+     actionRow(t('reboot'),null,[rebootBtn]),
+     actionRow(t('resetset'),t('resetsetH'),[resetBtn]),
+@@ -3276,7 +3298,19 @@ function uploadZone(dir,accept,hint,onDone,asGif){
+   return el('div',null,zone,fileIn);
+ }
+ let assetRev=0;
++async function validateIcon(file){
++  const header=new Uint8Array(await file.slice(0,10).arrayBuffer());
++  let w,h;
++  if(String.fromCharCode(...header.slice(0,3))==='GIF'){
++    w=header[6]|header[7]<<8;h=header[8]|header[9]<<8;
++  }else{
++    const bmp=await createImageBitmap(file);w=bmp.width;h=bmp.height;bmp.close();
++  }
++  if(!(w>0&&h>0&&w<=ICON_MAX&&h<=ICON_MAX_HEIGHT))
++    throw new Error('Image must fit within 52×16 pixels.');
++}
+ async function uploadFile(file,dir,name,onProgress){
++  if(dir==='/ICONS')await validateIcon(file);
+   const url=dir.startsWith('/api/')?dir:'/api/v1/files?dir='+encodeURIComponent(dir);
+   const x=await xhrPost(url,'file',file,name,onProgress);
+   if(x.status>=300)throw new Error('HTTP '+x.status);
+@@ -3319,7 +3353,7 @@ function viewIcons(view){
+   view.append(storSlot);
+   view.append(el('div',{class:'card wide'},
+     el('h2',null,t('icons')),el('div',{class:'ghelp'},t('iconshelp')),
+-    uploadZone('/ICONS','.png,.jpg,.jpeg,.gif','⬆ '+t('upload')+' (.png / .jpg / .gif, 8×8)',reload,true),
++    uploadZone('/ICONS','.png,.jpg,.jpeg,.gif','⬆ '+t('upload')+' (.png / .jpg / .gif, 16×16 – 52×16)',reload,true),
+     lametricCard(reload),
+     iconsGrid));
+   reload();
+@@ -3416,9 +3450,15 @@ const LIVE_NAME='draw-preview';
+ let piskelLiveOn=false,lastLiveErr='';
+ async function piskelLive(m){
+   piskelLiveOn=true;
+-  const body=m.mode==='bitmap'
+-    ?{hold:true,stack:false,name:LIVE_NAME,text:'',draw:[['bitmap',0,0,m.w,m.h,m.dataBase64]]}
+-    :{hold:true,stack:false,name:LIVE_NAME,text:'',icon:m.dataBase64};
++  let data=m.dataBase64;
++  if(m.mode==='bitmap'){
++    if(!(m.w>0&&m.h>0&&m.w<=ICON_MAX&&m.h<=ICON_MAX_HEIGHT))return;
++    const raw=atob(data),px=[];
++    if(raw.length!==m.w*m.h*3)return;
++    for(let i=0;i<raw.length;i+=3)px.push(raw.charCodeAt(i)<<16|raw.charCodeAt(i+1)<<8|raw.charCodeAt(i+2));
++    data=btoa(String.fromCharCode(...gifEncode([{t:0,px}],m.w,m.h,1)));
++  }
++  const body={hold:true,stack:false,name:LIVE_NAME,text:'',icon:data};
+   try{await post('/api/v1/notifications',body);lastLiveErr='';}
+   catch(e){if(e.message!==lastLiveErr){lastLiveErr=e.message;toast(e.message,false);}}
+ }
+@@ -3434,7 +3474,7 @@ window.addEventListener('message',e=>{
+     piskelReady=true;
+     const l=$('#piskelFrame')&&document.querySelector('.piskelload');if(l)l.remove();
+     notifyPiskelTheme();
+-    postToPiskel({type:'config',sizes:['8x8','32x8']});
++    postToPiskel({type:'config',sizes:ICON_SIZES});
+     if(pendingEditIcon){const n=pendingEditIcon;pendingEditIcon=null;piskelSendIcon(n);}
+   }else if(m.type==='save')piskelSave(m);
+   else if(m.type==='list')piskelSendList();
+@@ -3449,7 +3489,7 @@ function viewEditor(view){
+   piskelReady=false;
+   const url=getPiskelUrl();
+   const theme=document.documentElement.dataset.theme==='light'?'light':'dark';
+-  const src=url+(url.includes('?')?'&':'?')+'theme='+encodeURIComponent(theme)+'&sizes=8x8,32x8&host=awtrix';
++  const src=url+(url.includes('?')?'&':'?')+'theme='+encodeURIComponent(theme)+'&sizes='+ICON_SIZES.join(',')+'&host=awtrix';
+   const loading=el('div',{class:'piskelload'},el('span',{class:'spin'}),el('span',null,t('edLoading')));
+   const frame=el('iframe',{id:'piskelFrame',src,title:t('editorTab'),allow:'clipboard-read; clipboard-write'});
+   view.append(el('div',{class:'piskelwrap wide'},loading,frame));

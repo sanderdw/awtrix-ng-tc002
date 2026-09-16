@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
+Date: Wed, 16 Sep 2026 16:19:35 +0200
+Subject: [PATCH 7/8] config: reject hardware fields the TC002 cannot change
+ (AWTRIX_TC002)
+
+The clock has fixed wiring and a fixed 52 by 16 matrix; a restored backup or a
+PUT that changes them is refused with 422 instead of being applied silently.
+
+diff --git a/src/persistence/SystemConfigApply.cpp b/src/persistence/SystemConfigApply.cpp
+index 0699ab1..4a9c687 100644
+--- a/src/persistence/SystemConfigApply.cpp
++++ b/src/persistence/SystemConfigApply.cpp
+@@ -20,6 +20,20 @@ bool apply(DeviceConfig& cfg, api::JsonReader obj, int& applied, ApplyError& err
+   DeviceConfig merged = cfg;
+   const std::string ssid = merged.wifiSsid, pass = merged.wifiPass;
+   applied = merged.applyRead(obj);
++#ifdef AWTRIX_TC002
++  if(merged.panelWidth!=52 || merged.panels!=1) {
++    err={422,"validationFailed","TC002 has a fixed 52 by 16 pixel matrix","panelWidth"};
++    return false;
++  }
++#define FIXED(key) if(merged.key!=cfg.key) { \
++  err={422,"validationFailed","TC002 hardware wiring is fixed",#key}; return false; }
++  FIXED(panelStart) FIXED(panelWiring) FIXED(panelSerpentine)
++  FIXED(panelChainReverse) FIXED(panelChainSerpentine) FIXED(dfplayer)
++  FIXED(pinMatrix) FIXED(pinBtnLeft) FIXED(pinBtnSelect) FIXED(pinBtnRight)
++  FIXED(pinBattery) FIXED(pinLdr) FIXED(pinBuzzer) FIXED(pinI2cSda) FIXED(pinI2cScl)
++  FIXED(pinDfRx) FIXED(pinDfTx) FIXED(pinI2sBclk) FIXED(pinI2sLrclk) FIXED(pinI2sDout)
++#undef FIXED
++#endif
+   // A restored backup keeps the credentials this device is connected with — the backup may come
+   // from another network, and taking its Wi-Fi settings would strand the device.
+   if (origin == Origin::Restore) {

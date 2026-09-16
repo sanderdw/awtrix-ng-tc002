@@ -1,0 +1,88 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
+Date: Wed, 16 Sep 2026 16:19:35 +0200
+Subject: [PATCH 1/8] render: make the panel height, width and GIF limits
+ build-time settings
+
+A port for a taller panel (the 52 by 16 Ulanzi TC002) sets AWTRIX_MATRIX_HEIGHT,
+AWTRIX_PANEL_WIDTH and AWTRIX_GIF_MAX_W/H at build time. The defaults are the
+32 by 8 device, so nothing changes for ESP32 builds; the LZW scratch grows with
+the GIF limit instead of being a fixed 1024 slots.
+
+diff --git a/src/core/render/MatrixLayout.h b/src/core/render/MatrixLayout.h
+index 415a80f..ae6d17a 100644
+--- a/src/core/render/MatrixLayout.h
++++ b/src/core/render/MatrixLayout.h
+@@ -7,7 +7,14 @@
+ 
+ namespace awtrix {
+ 
+-inline constexpr int kMatrixHeight = 8;
++// A port for a taller or wider panel sets these at build time; the defaults are the 32 by 8 device.
++#ifndef AWTRIX_MATRIX_HEIGHT
++#define AWTRIX_MATRIX_HEIGHT 8
++#endif
++#ifndef AWTRIX_PANEL_WIDTH
++#define AWTRIX_PANEL_WIDTH 32
++#endif
++inline constexpr int kMatrixHeight = AWTRIX_MATRIX_HEIGHT;
+ inline constexpr int kMatrixWidthMin = 32;
+ inline constexpr int kMatrixWidthMax = 128;
+ 
+@@ -36,7 +43,7 @@ inline std::string enumNameChoices(const char* const* names, int count) {
+ }
+ 
+ struct MatrixLayout {
+-  int panelWidth = 32;
++  int panelWidth = AWTRIX_PANEL_WIDTH;
+   int panels = 1;
+   PanelStart panelStart = PanelStart::TopLeft;
+   Wiring panelWiring = Wiring::Rows;
+diff --git a/src/media/MicroGif.cpp b/src/media/MicroGif.cpp
+index e565fbc..c2aebca 100644
+--- a/src/media/MicroGif.cpp
++++ b/src/media/MicroGif.cpp
+@@ -10,7 +10,8 @@ namespace media {
+ 
+ namespace {
+ 
+-constexpr int kLzwSlots = 1024;
++// Sized for the panel: the stock 32 by 8 needs 516 slots, a 52 by 16 panel 1092.
++constexpr int kLzwSlots = MicroGif::kMaxW * MicroGif::kMaxH + 258 + 2 <= 1024 ? 1024 : 4096;
+ static_assert(MicroGif::kMaxW * MicroGif::kMaxH + 258 + 2 <= kLzwSlots,
+               "LZW scratch is sized for the panel; grow kLzwSlots with it");
+ 
+diff --git a/src/media/MicroGif.h b/src/media/MicroGif.h
+index f76bf15..1dbc3f7 100644
+--- a/src/media/MicroGif.h
++++ b/src/media/MicroGif.h
+@@ -12,8 +12,14 @@ namespace media {
+ // time, and everything larger than kMaxW x kMaxH is clipped or rejected.
+ class MicroGif {
+  public:
+-  static constexpr int kMaxW = 32;
+-  static constexpr int kMaxH = 8;
++#ifndef AWTRIX_GIF_MAX_W
++#define AWTRIX_GIF_MAX_W 32
++#endif
++#ifndef AWTRIX_GIF_MAX_H
++#define AWTRIX_GIF_MAX_H 8
++#endif
++  static constexpr int kMaxW = AWTRIX_GIF_MAX_W;
++  static constexpr int kMaxH = AWTRIX_GIF_MAX_H;
+ 
+   bool begin(const uint8_t* data, std::size_t len);
+ 
+diff --git a/src/persistence/DeviceConfig.h b/src/persistence/DeviceConfig.h
+index 21b751c..c0793dd 100644
+--- a/src/persistence/DeviceConfig.h
++++ b/src/persistence/DeviceConfig.h
+@@ -43,7 +43,7 @@ struct DeviceConfig {
+   float ldrFactor = 1.0f, ldrGamma = 2.2f;
+   bool ldrOnGround = false;
+   long brightnessSmoothing = 10000;
+-  int panelWidth = 32;
++  int panelWidth = AWTRIX_PANEL_WIDTH;
+   int panels = 1;
+   PanelStart panelStart = PanelStart::TopLeft;
+   Wiring panelWiring = Wiring::Rows;

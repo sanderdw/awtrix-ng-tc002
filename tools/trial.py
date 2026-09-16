@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory() as tmp:
     config=Path(tmp)/'device.json'
     config.write_text(json.dumps({'mqttEnabled':False,'ntpServer':'','wifiSsid':'','panelWidth':52,'panels':1}))
     for source,target in [(a.binary,'/tmp/awtrix-trial-bin'),(config,'/tmp/awtrix-trial-data/device.json'),
-        (next(w for w in (Path('build-upstream/webui/index.html'),Path('upstream/awtrix-ng/webui/index.html')) if w.exists()),'/tmp/awtrix-trial.html'),
+        (next(w for w in (Path('build-webui/index.html'),Path('upstream/awtrix-ng/webui/index.html')) if w.exists()),'/tmp/awtrix-trial.html'),
         (Path('assets/cacert.pem'),'/tmp/awtrix-cacert.pem')]:
         device('push',str(source),target)
 device('shell','chmod 700 /tmp/awtrix-trial-bin')
