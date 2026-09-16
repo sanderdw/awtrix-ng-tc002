@@ -80,7 +80,7 @@ storage and are limited to one at a time.
 
 ## Current status
 
-The current candidate is **1.1.1-tc002.2** (upstream 1.1.1). It restructures the source tree, hardens the
+The current candidate is **1.1.1-tc002.3** (upstream 1.1.1). It restructures the source tree, hardens the
 HTTP server, adds the launcher fallback and the vendor fingerprint gate, and has not yet been
 installed on a clock; the host test suite and golden screens pass. The previous candidate,
 1.1.0-tc002.7, was installed and verified after a Linux reboot on the test clock on

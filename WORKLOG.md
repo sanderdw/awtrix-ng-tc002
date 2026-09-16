@@ -436,3 +436,14 @@ minutes. The updater's log moves to `/data/awtrix-ng/update.log` because
 `/tmp` does not survive the reboot, and the app reports the vendor
 application's fingerprint at start. The web UI's Reboot only restarts the
 AWTRIX process; the validation protocol now says `adb shell reboot`.
+
+## 2026-09-16: on-clock validation of 1.1.1-tc002.2, boot counter lost on power cuts (1.1.1-tc002.3)
+
+- Cold boot twice: associated before the app's first log line both times; no access point.
+- Knob held at power-on: the stock Ulanzi UI started, `/tmp/awtrix-loader.log` read
+  "knob held at power-on: starting the vendor application", ADB worked under stock, and
+  a normal power cycle started AWTRIX again. First hardware run of the fallback path.
+- Three power cuts within 20 s of the display lighting up, then a normal boot: AWTRIX
+  started and `boot-attempts` read 1. The launcher's counter writes were never committed
+  to jffs2 before the power cuts. Fix: the launcher now fsyncs the counter file and its
+  directory. Retest of this step is pending on tc002.3.
