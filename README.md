@@ -4,8 +4,28 @@ An unofficial, community-maintained native Linux/ARMv7 port of **AWTRIX NG 1.1.1
 the Ulanzi TC002's **52 × 16** pixel matrix. It runs the upstream core, renderer, Berry
 scripting, HTTP API, MQTT dispatcher and web UI directly on the clock.
 
-**Read [Risks](#risks) before installing anything.** Installing replaces the clock's
-application partition; the RAM trial does not.
+## Quick start
+
+On a Linux or macOS computer (WSL on Windows) on the same Wi-Fi as the clock, with
+`python3`, `curl`, `unzip` and squashfs-tools installed (`apt install squashfs-tools` or
+`brew install squashfs`):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- CLOCK_IP
+```
+
+Replace `CLOCK_IP` with your clock's address. The installer downloads `adb` if needed, reads
+your clock's application partition, verifies it is the supported stock firmware (app 1.1.1,
+MCU V1.0.17), builds the firmware image and a recovery image on your computer, runs a
+preflight on the clock, and flashes only after you type `flash`. It never downloads a
+firmware image, because the image contains Ulanzi's own application. About three minutes.
+
+- Back to stock: add `--restore` to the same line.
+- Stuck clock: hold the knob while powering on to start the stock app.
+- Just looking: add `--build-only`, or use the [RAM trial](#try-from-ram-first), which flashes nothing.
+
+Installing rewrites the clock's application partition in place, with no second copy on the
+device. **Read [Risks](#risks) first.** Details: [docs/INSTALL.md](docs/INSTALL.md).
 
 Upstream is tracked as a pinned, unmodified git submodule plus a short patch series;
 everything TC002-specific lives in this repository. See [docs/PORTING.md](docs/PORTING.md).
@@ -217,17 +237,9 @@ TC002_TOOLCHAIN=/path/to/gcc9 TC002_TLS=/path/to/openssl-build bash tools/build.
 
 ## Install
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- CLOCK_IP
-```
-
-Needs `python3`, `curl`, `unzip` and squashfs-tools on a Linux or macOS computer (WSL on
-Windows); `adb` is downloaded for you. The installer reads your clock's application partition,
-verifies the stock firmware, builds `update.img` and `restore-stock.img` on your computer, runs
-the helper's preflight, and flashes only after you type `flash`. It never downloads a firmware
-image, because the image contains Ulanzi's own application. Details, requirements, the way back
-to stock and what to do if the clock does not come back: [docs/INSTALL.md](docs/INSTALL.md).
-Prefer trying it from RAM first; that flashes nothing.
+See [Quick start](#quick-start) for the one-line installer and [docs/INSTALL.md](docs/INSTALL.md)
+for what it does, the way back to stock and what to do if the clock does not come back. The
+sections below cover building from source and installing by hand.
 
 ## Try from RAM first
 
