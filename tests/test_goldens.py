@@ -89,6 +89,9 @@ def test_goldens(app):
         got = actual['screens'][name]
         diff = [(i % 52, i // 52, hex(g), hex(w)) for i, (g, w) in enumerate(zip(got, pixels)) if g != w]
         assert not diff, (name, diff[:10], len(diff))
-    for key in ('capabilities', 'version', 'device', 'system'):
+    for key in ('capabilities', 'device', 'system'):
         assert actual[key] == expected[key], key
+    import re
+    cmake = re.search(r'AWTRIX_NG_VERSION="([^"]+)"', (ROOT / 'CMakeLists.txt').read_text())[1]
+    assert actual['version'] == {'version': cmake}
     assert actual['webuiSha256'] == expected['webuiSha256']

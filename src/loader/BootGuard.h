@@ -44,6 +44,7 @@ static inline int tc002RecordBootAttempt(const char* path) {
   fsync(fileno(f));
   fclose(f);
   tc002SyncDirectoryOf(path);
+  sync();
   return attempts;
 }
 
