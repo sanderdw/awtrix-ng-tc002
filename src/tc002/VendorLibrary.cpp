@@ -2,7 +2,6 @@
 
 #include <dlfcn.h>
 #include <link.h>
-#include <openssl/evp.h>
 
 #include <cstdio>
 #include <cstring>
@@ -10,6 +9,7 @@
 #include <map>
 #include <mutex>
 
+#include "Sha256.h"
 #include "VendorFingerprints.h"
 
 namespace tc002 {
@@ -33,25 +33,11 @@ void record(const char* library, const std::string& path, const std::string& dig
 std::string fileSha256(const std::string& path) {
   std::ifstream in(path, std::ios::binary);
   if (!in) return "";
-  EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-  if (!ctx || EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr) != 1) {
-    EVP_MD_CTX_free(ctx);
-    return "";
-  }
+  Sha256 hash;
   char buffer[16384];
   while (in.read(buffer, sizeof(buffer)) || in.gcount() > 0)
-    EVP_DigestUpdate(ctx, buffer, static_cast<size_t>(in.gcount()));
-  unsigned char digest[EVP_MAX_MD_SIZE];
-  unsigned length = 0;
-  EVP_DigestFinal_ex(ctx, digest, &length);
-  EVP_MD_CTX_free(ctx);
-  static const char* hex = "0123456789abcdef";
-  std::string out;
-  for (unsigned i = 0; i < length; ++i) {
-    out += hex[digest[i] >> 4];
-    out += hex[digest[i] & 15];
-  }
-  return out;
+    hash.update(buffer, static_cast<size_t>(in.gcount()));
+  return hash.hex();
 }
 
 bool vendorFileTrusted(const char* library, const std::string& path) {

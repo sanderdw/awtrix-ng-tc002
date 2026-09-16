@@ -1,5 +1,7 @@
 #include "Tc002Hardware.h"
 #include "InputDevices.h"
+#include "Sha256.h"
+#include <string>
 #include <cstdio>
 #include <cstdlib>
 void check(bool b) { if(!b) std::abort(); }
@@ -41,5 +43,14 @@ int main() {
     int fds[2]; check(tc002OpenInputDevices(fds,2,O_RDONLY|O_NONBLOCK|O_CLOEXEC)>=0);
     check(tc002SelectHeld(fds,0)==0);
   }
-  std::puts("TC002 frame geometry, RGB, padding, orientation and input classification passed");
+  {
+    tc002::Sha256 empty; check(empty.hex()=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    tc002::Sha256 abc; abc.update("abc",3);
+    check(abc.hex()=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    tc002::Sha256 two; two.update("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",56);
+    check(two.hex()=="248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
+    tc002::Sha256 million; std::string a(1000,'a'); for(int i=0;i<1000;++i) million.update(a.data(),a.size());
+    check(million.hex()=="cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0");
+  }
+  std::puts("TC002 frame geometry, RGB, padding, orientation, input classification and SHA-256 passed");
 }
