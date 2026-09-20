@@ -538,3 +538,28 @@ MP3 uploader is hidden while the host reports no audio.
 Not yet on a clock: everything above, in particular `on_button_event()` from the knob and the
 select button, `timer.every()`, Modbus reads, `icons`/`iconGap` pages and JPG icons larger than
 8x8.
+
+## 2026-09-20: 1.1.2-tc002.1 on the clock
+
+Built from `4167223` (clean tree). RAM trial first (`tools/trial.py`, 40 s, port 18081): the binary
+started on stock 1.1.1 / MCU V1.0.17, reported the fixed 52 by 16 matrix, audio and an empty
+`updateImage`; a notification with `icon`, `iconGap: 3` and one placed icon rendered as on the host
+(text from x=22, placed icon at x=46) and a `timer.every()` script loaded. The installed
+1.1.1-tc002.4 came back afterwards.
+
+Installed with the packaged installer bundle over ADB: three vendor fingerprints verified, preflight
+passed, `update.img` 4428348 bytes. The clock answered with 1.1.2-tc002.1 again about 140 s after
+the write began, at 42 FPS, with its apps (Time, Battery, temperature, Date) and settings intact.
+The recovery image is under `~/.awtrix-ng-tc002/192.168.100.190/20260920-222648/`.
+
+Two installer defects met on the way, neither of which wrote anything wrong:
+- `tools/install.py` run from the repository fails in `fingerprints()`: it reads
+  `vendor-fingerprints.json` next to itself, which exists only in the bundle (`bundle_paths()`
+  handles both layouts, this does not). Worked around by packaging the bundle and running from it.
+- `flash()` runs `--install` through `adb shell` with a 120 s timeout and does not catch
+  `TimeoutExpired`; adb hung when the clock rebooted under it, so the installer died with a
+  traceback after the write instead of going on to `wait_for()`.
+
+Not run on this build: docs/VALIDATION.md (cold boots, knob-hold fallback, three-strikes fallback,
+restore-stock), `on_button_event()` from the physical knob and select button, Modbus reads, JPG
+icons larger than 8x8.
