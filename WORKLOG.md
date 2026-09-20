@@ -6,7 +6,7 @@ rounds; earlier version numbers and test counts describe those earlier rounds.
 Paths under `device-private/` and `dist/` refer to local evidence and artifacts
 that are not included in the public repository.
 
-Upstream: AWTRIX NG 1.1.1, commit `73b4582e157484a737397bb0fa616da62212fe9e` (earlier rounds: 1.1.0, `4ff1de83428ed13cae6e210dfcbf9d186a09bc60`).
+Upstream: AWTRIX NG 1.1.2, commit `6d6cc64aa6739724d8501199de70c6692cbb2c6c` (earlier rounds: 1.1.1, `73b4582e157484a737397bb0fa616da62212fe9e`; 1.1.0, `4ff1de83428ed13cae6e210dfcbf9d186a09bc60`).
 Device: TC002 stock app 1.1.1, MCU V1.0.17, ARMv7 SSD202D, glibc 2.30.
 Validation date: 2026-09-15. Permanent installation and startup after Linux reboot passed.
 
@@ -496,3 +496,45 @@ layout from a partition that already carries the port. The bundle is validated b
 same allowlist checker as the trial ZIP and contains no vendor file. Exercised in
 build-only mode against the test clock: dump, three fingerprints verified, both images
 valid; the firmware itself is unchanged from tc002.4.
+
+## 2026-09-20: upstream 1.1.2 (1.1.2-tc002.1 candidate)
+
+Moved the submodule to v1.1.2 (`6d6cc64`) with `tools/upstream.py rebase`. Seven of the eight
+patches touched files upstream changed:
+
+- 0001 lost its GIF half: upstream removed `MicroGif::kMaxW/kMaxH` and bounds GIFs by the panel
+  at run time, so `AWTRIX_GIF_MAX_W/H` are gone from the patch and from `CMakeLists.txt`.
+- 0002 keeps the decoded JPEG size next to upstream's new out-of-memory flag:
+  `icon::draw(canvas, id, x, y, bool* outOfMemory, int* width, int* height)`.
+- 0005 now sits on upstream's `iconColumn()`/`iconGap`: the gap is `iconGap` times the text scale
+  (2 on the 16-row panel), `DevicePageIcon` keeps the source picture in upstream's dynamic buffer
+  and scales classic tiles at blit time, and the main icon is centred through a new
+  `IPageIcon::height()`. Placed icons (`icons`) use the same class, so classic 8-row art doubles
+  there too while `x`/`y` stay physical pixels.
+- 0006 shrank to "script JPG icons up to the panel size"; upstream's `ScriptIconSet` already sizes
+  GIFs to the panel, so `AWTRIX_SCRIPT_ICON_W/H` are gone as well.
+- 0008 keeps the update row behind `stats.updateImage`. Upstream's new "Download & install"
+  fetches ESP32 images from its own feed; the port reports an empty `updateImage`, so the row is
+  absent and the version moves to the firmware file row. The upload now requires `{"ok":true}`,
+  which `/update` already returns.
+
+Port side: `main_tc002.cpp` reconciled with `main_sim.cpp` (panel size for script icons,
+press/release button hook, page icon invalidation); `Tc002Periphery` passes the select button's
+held state every tick and reports a knob detent as a press followed by its release;
+`Tc002ScriptHttp` serves `modbus://` reads like the simulator.
+
+Behaviour change taken from upstream: the progress bar starts at the icon's edge and runs under
+the gap. `tests/test_scaling.py` and the `icon-text-progress` golden (6 pixels) follow it; no
+other golden pixel changed.
+
+Host: 143 pytest cases and 3 CTest cases pass, three of them new: the scaled `iconGap`, placed
+icons at physical coordinates, and a knob detent reaching `on_button_event()` as a consumed press
+plus its release. The ARM cross build links. In a headless browser the System page shows no
+update row, the version and an `.img` file input; matrix badge, icon limits and editor sizes
+follow the 52 by 16 capability. `tools/check_webui.py` does not pass on a host build, and did not
+before this bump: its Icons text assertion matches nothing in upstream 1.1.1 or 1.1.2, and the
+MP3 uploader is hidden while the host reports no audio.
+
+Not yet on a clock: everything above, in particular `on_button_event()` from the knob and the
+select button, `timer.every()`, Modbus reads, `icons`/`iconGap` pages and JPG icons larger than
+8x8.

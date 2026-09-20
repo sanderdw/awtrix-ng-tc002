@@ -9,10 +9,10 @@ facts, without patching the server. runOnLoop is exposed for handlers that run
 on the listener thread. A failed asset write now answers 507 instead of 200.
 
 diff --git a/src/sim/SimHttpServer.cpp b/src/sim/SimHttpServer.cpp
-index 7d792d4..636db16 100644
+index bd45756..cde6055 100644
 --- a/src/sim/SimHttpServer.cpp
 +++ b/src/sim/SimHttpServer.cpp
-@@ -97,7 +97,8 @@ class HostRestoreSink : public backup::FsRestoreSink {
+@@ -98,7 +98,8 @@ class HostRestoreSink : public backup::FsRestoreSink {
  // Every fact below is invented. The host has no radio, no battery gauge and no meaningful heap
  // figures, but the web UI expects the same shape the device sends.
  std::string simDeviceStateJson(CoreEngine& engine, const std::string& uid,
@@ -22,7 +22,7 @@ index 7d792d4..636db16 100644
    DeviceFacts facts;
    facts.boardType = "simulator";
    facts.soc = pins::activeProfile().id;
-@@ -114,6 +115,7 @@ std::string simDeviceStateJson(CoreEngine& engine, const std::string& uid,
+@@ -115,6 +116,7 @@ std::string simDeviceStateJson(CoreEngine& engine, const std::string& uid,
    facts.hasHumidity = true;
    facts.hasPressure = false;
    facts.scriptingRunning = scriptingRunning;
@@ -30,7 +30,7 @@ index 7d792d4..636db16 100644
    return buildDeviceJson(engine, uid, facts);
  }
  
-@@ -190,6 +192,7 @@ struct SimHttpServer::Impl {
+@@ -191,6 +193,7 @@ struct SimHttpServer::Impl {
    SimHttpServer::ScriptSourceFn scriptSource;
    SimHttpServer::ScriptSourceFn scriptStore;
    SimHttpServer::StoredScriptsFn storedScripts;
@@ -38,7 +38,7 @@ index 7d792d4..636db16 100644
  
    // httplib answers on its own thread, but the engine is single-threaded. Every handler is queued
    // here and blocks until tick() has run it on the main loop, so no route ever needs a lock.
-@@ -384,7 +387,10 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
+@@ -385,7 +388,10 @@ void SimHttpServer::Impl::handleFiles(const httplib::Request& req, const std::st
        }
        std::error_code ec;
        stdfs::create_directories(stdfs::u8path(sim::hostPath(target)).parent_path(), ec);
@@ -50,7 +50,7 @@ index 7d792d4..636db16 100644
        logf("sim files: uploaded %s (%u B)", target.c_str(),
             static_cast<unsigned>(f.content.size()));
      }
-@@ -486,6 +492,7 @@ void SimHttpServer::Impl::handleSim(const httplib::Request& req, const std::stri
+@@ -487,6 +493,7 @@ void SimHttpServer::Impl::handleSim(const httplib::Request& req, const std::stri
  }
  
  void SimHttpServer::Impl::route(const httplib::Request& req, httplib::Response& res) {
@@ -58,7 +58,7 @@ index 7d792d4..636db16 100644
    const std::string& path = req.path;
    const api::MethodResolution resolved = api::resolveHttpMethod(
        req.method, path,
-@@ -619,7 +626,7 @@ bool SimHttpServer::Impl::serveState(const httplib::Request& req, const std::str
+@@ -620,7 +627,7 @@ bool SimHttpServer::Impl::serveState(const httplib::Request& req, const std::str
    if (path == "/api/v1/device") {
      sendJson(res, 200, simDeviceStateJson(*engine, uid,
                                            net::effectiveHostname(cfg->hostname, uid),
@@ -67,7 +67,7 @@ index 7d792d4..636db16 100644
      return true;
    }
    if (path == "/api/v1/display") {
-@@ -757,6 +764,10 @@ void SimHttpServer::setScripts(const script::ScriptHost* host, ScriptSourceFn re
+@@ -765,6 +772,10 @@ void SimHttpServer::setScripts(const script::ScriptHost* host, ScriptSourceFn re
    impl_->storedScripts = std::move(stored);
  }
  
@@ -78,7 +78,7 @@ index 7d792d4..636db16 100644
  bool SimHttpServer::begin(uint16_t port, CoreEngine& engine, SimBoard& board, Canvas& screen,
                            const std::string& uid, DeviceConfig& cfg,
                            const std::string& webuiFile) {
-@@ -770,6 +781,7 @@ bool SimHttpServer::begin(uint16_t port, CoreEngine& engine, SimBoard& board, Ca
+@@ -778,6 +789,7 @@ bool SimHttpServer::begin(uint16_t port, CoreEngine& engine, SimBoard& board, Ca
    im->port = port;
  
    im->svr.set_default_headers({{"Access-Control-Allow-Origin", "*"}});

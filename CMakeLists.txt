@@ -33,8 +33,7 @@ if(NOT TC002_FINGERPRINT_RESULT EQUAL 0)
   message(FATAL_ERROR "tools/vendor_fingerprints.py failed; see the output above")
 endif()
 # The clock's panel geometry, applied through the build-time knobs the patch series adds upstream.
-set(TC002_PANEL AWTRIX_MATRIX_HEIGHT=16 AWTRIX_PANEL_WIDTH=52 AWTRIX_GIF_MAX_W=52 AWTRIX_GIF_MAX_H=16
-  AWTRIX_SCRIPT_ICON_W=52 AWTRIX_SCRIPT_ICON_H=16)
+set(TC002_PANEL AWTRIX_MATRIX_HEIGHT=16 AWTRIX_PANEL_WIDTH=52)
 file(GLOB_RECURSE CORE CONFIGURE_DEPENDS ${U}/src/core/*.cpp ${U}/src/core/*.c)
 file(GLOB SIM CONFIGURE_DEPENDS ${U}/src/sim/*.cpp)
 list(FILTER SIM EXCLUDE REGEX "main_sim\\.cpp$")
@@ -57,7 +56,7 @@ target_include_directories(tc002-update PRIVATE src/tc002 ${TC002_GENERATED})
 target_include_directories(awtrix-tc002 PRIVATE src/tc002 src/tc002/compat src/updater src/loader ${TC002_GENERATED}
   ${U}/src ${U}/src/sim/compat vendor/base64/src vendor/PubSubClient/src)
 target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL}
-  AWTRIX_NG_VERSION="1.1.1-tc002.5" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
+  AWTRIX_NG_VERSION="1.1.2-tc002.1" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(awtrix-tc002 PRIVATE -Wall -Wextra -Wno-unused-parameter
   -ffunction-sections -fdata-sections)
 target_link_options(awtrix-tc002 PRIVATE -Wl,--gc-sections)

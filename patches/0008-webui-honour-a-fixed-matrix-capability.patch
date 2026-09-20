@@ -8,10 +8,10 @@ hidden, the live preview and icon limits follow the reported size, the icon
 editor offers matching presets and firmware uploads accept .img files.
 
 diff --git a/webui/index.html b/webui/index.html
-index 99eab28..3cb5722 100644
+index a9cf165..c2fd9f8 100644
 --- a/webui/index.html
 +++ b/webui/index.html
-@@ -1586,6 +1586,20 @@ const SOUND_KEYS=Object.keys(SYSF).filter(k=>SYSF[k].api==='settings');
+@@ -1588,6 +1588,20 @@ const SOUND_KEYS=Object.keys(SYSF).filter(k=>SYSF[k].api==='settings');
  const S={transitions:[],stats:null,ap:false,sysHost:'',sysUid:'',gpio:null,aud:null,
    scriptsOff:null};
  function readAudioCaps(caps){
@@ -32,7 +32,7 @@ index 99eab28..3cb5722 100644
    const a=caps.audio||{};
    S.aud={buzzer:a.buzzer===true,track:a.track===true,mp3:a.mp3===true,radio:a.radio===true};
  }
-@@ -1600,6 +1614,15 @@ async function scriptsOff(){
+@@ -1602,6 +1616,15 @@ async function scriptsOff(){
    return S.scriptsOff;
  }
  function applyGpioCaps(c){
@@ -48,7 +48,7 @@ index 99eab28..3cb5722 100644
    const dflt=c.defaults||{};
    const gp=p=>'GPIO '+p;
    const inR=(rs,p)=>(rs||[]).some(r=>p>=r[0]&&p<=r[1]);
-@@ -2058,12 +2081,12 @@ function gifEncode(frames,W,H,SC){
+@@ -2060,12 +2083,12 @@ function gifEncode(frames,W,H,SC){
    return new Uint8Array(b);
  }
  const gifGap=SC=>SC>1?Math.max(1,Math.round(SC/10)):0;
@@ -63,7 +63,7 @@ index 99eab28..3cb5722 100644
    g.drawImage(bmp,0,0,w,h);
    if(bmp.close)bmp.close();
    const d=g.getImageData(0,0,w,h).data,px=[];
-@@ -2079,7 +2102,7 @@ async function iconAsGif(file,name){
+@@ -2081,7 +2104,7 @@ async function iconAsGif(file,name){
      const bmp=await createImageBitmap(file);
      const w=bmp.width,h=bmp.height;
      if(bmp.close)bmp.close();
@@ -72,7 +72,7 @@ index 99eab28..3cb5722 100644
      return{blob:await imgToGif(file),name:String(name).replace(/\.[^.]+$/,'')+'.gif'};
    }catch(e){return null;}
  }
-@@ -2139,9 +2162,11 @@ function vitalTile(d){
+@@ -2141,9 +2164,11 @@ function vitalTile(d){
  const metaItem=(k,v,cls)=>el('span',null,k+' ',el('b',cls?{class:cls}:null,String(v)));
  function viewDash(view){
    const SC=10;
@@ -86,7 +86,7 @@ index 99eab28..3cb5722 100644
    const bri=el('input',{type:'range',min:0,max:255,value:S.stats?S.stats.brightness:120,
      'aria-label':t('brightness')});
    const briVal=el('span',{class:'val'},String(S.stats?S.stats.brightness:120));
-@@ -3524,6 +3549,10 @@ function systemPage(view,data){
+@@ -3528,6 +3553,10 @@ function systemPage(view,data){
      data.tzName=TZFIRST.get(data.tz)||'UTC';
    const page=systemSettingsPage(view,data);
    const sysFields=renderSettingsInto(page,data,SYSF,SYS_GROUPS);
@@ -97,8 +97,8 @@ index 99eab28..3cb5722 100644
    advancedSection(page,data,SYSF);
    if(sysFields.hostname&&S.sysHost)
      sysFields.hostname.row.querySelector('input').placeholder=S.sysHost;
-@@ -3709,7 +3738,7 @@ function updateRow(){
-     el('div',{class:'ctl'},[chkBtn,dl,notes]));
+@@ -3745,7 +3774,7 @@ function updateRow(install){
+     el('div',{class:'ctl'},[notes,installBtn]));
  }
  function maintenanceSection(page){
 -  const fwIn=el('input',{type:'file',accept:'.bin'});
@@ -106,18 +106,18 @@ index 99eab28..3cb5722 100644
    const fwBtn=el('button',null,t('choose'));
    const fw=progressRow();
    fwBtn.addEventListener('click',()=>fwIn.click());
-@@ -3738,8 +3767,8 @@ function maintenanceSection(page){
+@@ -3792,8 +3821,8 @@ function maintenanceSection(page){
+     catch(e){toast(e.message,false);eraseBtn.disabled=false;}
    });
-   const ver=S.stats&&S.stats.version;
    page.section('maint',t('maint'),t('mainthelp'),[
--    updateRow(),
--    actionRow(t('fwfile'),ver?t('version')+' '+ver:null,[fwBtn,fwIn]),
-+    ...(S.stats&&S.stats.updateImage?[updateRow()]:[]),
-+    actionRow(S.matrix&&S.matrix.fixed?t('fwfile').replace('.bin','.img'):t('fwfile'),ver?t('version')+' '+ver:null,[fwBtn,fwIn]),
-     fw.row,
+-    updateRow(installFirmware),
+-    actionRow(t('fwfile'),null,[fwBtn,fwIn]),
++    ...(S.stats&&S.stats.updateImage?[updateRow(installFirmware)]:[]),
++    actionRow(S.matrix&&S.matrix.fixed?t('fwfile').replace('.bin','.img'):t('fwfile'),S.stats&&!S.stats.updateImage&&S.stats.version?t('version')+' '+S.stats.version:null,[fwBtn,fwIn]),
+     fwStatus,fw.row,
      actionRow(t('reboot'),null,[rebootBtn]),
      actionRow(t('resetset'),t('resetsetH'),[resetBtn]),
-@@ -3840,7 +3869,19 @@ function uploadZone(dir,accept,hint,onDone,asGif){
+@@ -3894,7 +3923,19 @@ function uploadZone(dir,accept,hint,onDone,asGif){
    return el('div',null,zone,fileIn);
  }
  let assetRev=0;
@@ -137,7 +137,7 @@ index 99eab28..3cb5722 100644
    const url=dir.startsWith('/api/')?dir:'/api/v1/files?dir='+encodeURIComponent(dir);
    const x=await xhrPost(url,'file',file,name,onProgress);
    if(x.status>=300)throw new Error('HTTP '+x.status);
-@@ -4345,9 +4386,16 @@ let piskelLiveOn=false,lastLiveErr='',piskelLiveGeneration=0,piskelLiveQueue=Pro
+@@ -4399,9 +4440,16 @@ let piskelLiveOn=false,lastLiveErr='',piskelLiveGeneration=0,piskelLiveQueue=Pro
  async function piskelLive(m){
    piskelLiveOn=true;
    const generation=piskelLiveGeneration;
@@ -157,7 +157,7 @@ index 99eab28..3cb5722 100644
    piskelLiveQueue=piskelLiveQueue.catch(()=>{}).then(async()=>{
      if(!piskelLiveOn||generation!==piskelLiveGeneration)return;
      try{await post('/api/v1/notifications',body);lastLiveErr='';}
-@@ -4375,7 +4423,7 @@ window.addEventListener('message',e=>{
+@@ -4429,7 +4477,7 @@ window.addEventListener('message',e=>{
      piskelReady=true;
      const l=$('#piskelFrame')&&document.querySelector('.piskelload');if(l)l.remove();
      notifyPiskelTheme();
@@ -166,7 +166,7 @@ index 99eab28..3cb5722 100644
      if(pendingEditIcon){const n=pendingEditIcon;pendingEditIcon=null;piskelSendIcon(n);}
    }else if(m.type==='save')piskelSave(m);
    else if(m.type==='publish')piskelPublish(m);
-@@ -4396,7 +4444,7 @@ function viewEditor(view){
+@@ -4450,7 +4498,7 @@ function viewEditor(view){
    // editor falls back to whatever host it was built against, and an override in
    // localStorage would reach the gallery but not the editor inside it.
    const src=url+(url.includes('?')?'&':'?')+'theme='+encodeURIComponent(theme)+

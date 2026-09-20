@@ -1,6 +1,6 @@
 # Attribution and source provenance
 
-This is an unofficial TC002 platform port of **AWTRIX NG 1.1.1**, by Blueforcer
+This is an unofficial TC002 platform port of **AWTRIX NG 1.1.2**, by Blueforcer
 and its contributors, at commit `73b4582e157484a737397bb0fa616da62212fe9e`:
 https://github.com/Blueforcer/awtrix-ng
 

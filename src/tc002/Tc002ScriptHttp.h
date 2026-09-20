@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -11,7 +12,9 @@
 
 #include "Tc002Hardware.h"
 #include "core/script/HttpBodyFilter.h"
+#include "core/script/ModbusTcp.h"
 #include "core/script/ScriptServices.h"
+#include "sim/compat/WiFiClient.h"
 #include "sim/vendor/httplib.h"
 #include "system/Log.h"
 
@@ -29,6 +32,28 @@ class Tc002ScriptHttp : public script::IScriptHttp {
   bool request(const script::HttpRequest& req) override {
     if (!onResult_) return false;
     if (pending_.load() >= kMaxPending) return false;
+
+    // Modbus TCP reads share the request queue, as in the simulator.
+    if (script::modbus::isUrl(req.url)) {
+      script::modbus::Read read;
+      if (req.method != "GET" || !script::modbus::parse(req.url, read)) return false;
+      pending_.fetch_add(1);
+      std::thread([this, read, id = req.id] {
+        script::HttpResult result;
+        result.id = id;
+        WiFiClient client;
+        if (client.connect(read.host.c_str(), read.port)) {
+          result = script::modbus::exchange(client, read, id, [] {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+          }, [] { std::this_thread::sleep_for(std::chrono::milliseconds(1)); });
+        }
+        client.stop();
+        pending_.fetch_sub(1);
+        onResult_(std::move(result));
+      }).detach();
+      return true;
+    }
 
     std::string origin, target;
     if (!split(req.url, origin, target)) {

@@ -101,11 +101,15 @@ void Tc002Periphery::tick(int64_t nowMs) {
   const int rotation = board_->takeRotation();
   for (int i = 0; i < std::abs(rotation); ++i) {
     const bool next = (rotation > 0) != swapped;
-    const bool handled = buttonHook_ && buttonHook_(next ? 2 : 0);
+    // A detent has no held state: report it as a press and its release in one go. Only the press
+    // can be consumed.
+    const bool handled = buttonHook_ && buttonHook_(next ? 2 : 0, true);
+    if (buttonHook_) buttonHook_(next ? 2 : 0, false);
     if (!handled && !blocked)
       engine_->submit(Command(next ? CommandType::NextApp : CommandType::PreviousApp));
   }
-  const bool tookSelect = sEdge && buttonHook_ && buttonHook_(1);
+  // The hook sees the held state every tick so it can time long presses and the release.
+  const bool tookSelect = buttonHook_ && buttonHook_(1, cur.select);
   // One press dismisses the current notification, two inside kDoublePressMs toggle the panel. A
   // consumed press is not remembered, so it can never pair up with the next one.
   if (sEdge && !tookSelect) {
