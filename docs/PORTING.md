@@ -4,7 +4,7 @@ Three layers, strictly separated:
 
 | Layer | Where | Rule |
 |---|---|---|
-| Upstream AWTRIX NG | `upstream/awtrix-ng` (git submodule) | Pinned to one upstream commit (v1.1.1). Never edited. |
+| Upstream AWTRIX NG | `upstream/awtrix-ng` (git submodule) | Pinned to one upstream commit (v1.1.2). Never edited. |
 | Patch series | `patches/NNNN-*.patch` | Small, ordered `git format-patch` commits on top of the pin. Each is either a hook upstream could take as-is (with the upstream default unchanged) or guarded by `AWTRIX_TC002` / a build-time macro. |
 | Port | `src/tc002`, `src/loader`, `src/updater`, `tools`, `tests`, `docs` | Everything TC002-specific. Compiles against the patched tree, never against the submodule directly. |
 
@@ -37,7 +37,7 @@ submodule is clean, and that `export` is idempotent.
 ## Bumping upstream
 
 ```sh
-uv run tools/upstream.py rebase v1.1.1      # moves the submodule, re-applies the series
+uv run tools/upstream.py rebase v1.1.2      # moves the submodule, re-applies the series
 # resolve conflicts inside build-upstream/ with `git am --continue`
 uv run tools/upstream.py export
 uv run tools/check_main_drift.py            # then carry upstream's main_sim.cpp changes into src/tc002/main_tc002.cpp

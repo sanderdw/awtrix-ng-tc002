@@ -1,6 +1,7 @@
 """Exercise TC002 button gestures through the real application event loop."""
 import json
 import time
+import urllib.request
 
 import pytest
 from test_platform import app
@@ -128,6 +129,26 @@ def test_knob_navigation_is_separate_from_buttons(app):
     settings = app('/api/v1/settings')
     assert settings['brightness'] == 120
     assert [settings[k] for k in VOLUMES] == [50, 60, 70]
+
+
+def test_knob_detent_is_a_press_and_release_for_script_events(app):
+    setup_controls(app)
+    script = ('class Knob\n var seen\n def init()\n self.seen = []\n end\n'
+              ' def on_button_event(btn, event)\n self.seen.push(btn + ":" + event)\n return true\n end\n'
+              ' def draw()\n clear()\n'
+              ' if self.seen.find("right:press") != nil pixel(0, 0, rgb(0, 255, 0)) end\n'
+              ' if self.seen.find("right:release") != nil pixel(1, 0, rgb(0, 0, 255)) end\n'
+              ' end\nend\nreturn Knob()')
+    req = urllib.request.Request(app.base_url + '/api/v1/apps/script/knob', script.encode(),
+                                 {'Content-Type': 'text/plain'}, method='PUT')
+    with urllib.request.urlopen(req) as response:
+        assert response.status == 200
+    app('/api/v1/apps/active', {'name': 'knob', 'fast': True}, 'PUT')
+    wait_screen(app, lambda px: current(app) == 'knob' and not any(px))
+    app('/sim/rotary/right', {}, 'POST')
+    wait_screen(app, lambda px: px[0] == 0x00FF00 and px[1] == 0x0000FF)
+    # The script took the press, so the detent did not also change the app.
+    assert current(app) == 'knob'
 
 
 def test_navigation_lock_keeps_volume_controls_available(app):

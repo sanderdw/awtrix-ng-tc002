@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
+Date: Wed, 16 Sep 2026 16:19:35 +0200
+Subject: [PATCH 6/8] media: script JPG icons up to the panel size
+
+GIF icons already follow the panel; a JPG was decoded into a fixed 8x8 tile. Decode it
+into a panel-sized buffer, take the size icon::draw reports, and pack the rows to the
+picture's own stride so the entry keeps only what it shows.
+
+diff --git a/src/media/ScriptIcon.cpp b/src/media/ScriptIcon.cpp
+index 32777ac..302548a 100644
+--- a/src/media/ScriptIcon.cpp
++++ b/src/media/ScriptIcon.cpp
+@@ -117,17 +117,26 @@ void ScriptIconSet::load(Entry& e, int64_t nowMs) {
+ 
+   if (r == GifPlayer::OpenResult::kMissing) {
+     // No GIF under that name, so fall back to the JPG icon of the same id.
+-    if (e.pixels.resize(8 * 8)) {
+-      Canvas buf(8, 8, e.pixels.data());
++    // Its size is only known once decoded: decode into a panel-sized buffer, then pack the rows
++    // to the picture's own stride and give the rest back.
++    const int maxWidth = service_.maxWidth();
++    if (e.pixels.resize(static_cast<size_t>(maxWidth) * service_.maxHeight())) {
++      Canvas buf(maxWidth, service_.maxHeight(), e.pixels.data());
+       buf.clear();
+       bool outOfMemory = false;
+-      if (icon::draw(buf, name, 0, 0, &outOfMemory)) {
+-        e.width = e.height = 8;
++      if (icon::draw(buf, name, 0, 0, &outOfMemory, &e.width, &e.height)) {
++        for (int y = 1; y < e.height; ++y)
++          std::memmove(e.pixels.data() + static_cast<size_t>(y) * e.width,
++                       e.pixels.data() + static_cast<size_t>(y) * maxWidth,
++                       static_cast<size_t>(e.width) * sizeof(uint32_t));
++        e.pixels.resize(static_cast<size_t>(e.width) * e.height);
++        e.pixels.shrinkToFit();
+         e.state = State::kGood;
+         e.retryStep = 0;
+         return;
+       }
+       e.pixels.clear();
++      e.width = e.height = 0;
+       if (!outOfMemory) {
+         e.state = State::kMissing;
+         e.retryStep = 0;

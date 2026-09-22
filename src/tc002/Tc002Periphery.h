@@ -19,7 +19,7 @@ class Tc002Board;
 class Tc002Periphery {
  public:
   void begin(CoreEngine& engine, Tc002Board& board, const DeviceConfig& cfg);
-  void setButtonHook(std::function<bool(int)> hook) { buttonHook_ = std::move(hook); }
+  void setButtonHook(std::function<bool(int, bool)> hook) { buttonHook_ = std::move(hook); }
   void tick(int64_t nowMs);
   void renderControlFeedback(Canvas& canvas, int64_t nowMs) const;
 
@@ -30,7 +30,7 @@ class Tc002Periphery {
   CoreEngine* engine_ = nullptr;
   Tc002Board* board_ = nullptr;
   const DeviceConfig* cfg_ = nullptr;
-  std::function<bool(int)> buttonHook_;
+  std::function<bool(int, bool)> buttonHook_;
   ButtonState prev_{};
   ButtonState raw_{};
   ButtonState stable_{};

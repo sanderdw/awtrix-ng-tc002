@@ -3,6 +3,7 @@
 #include "FirmwareImage.h"
 #include "VendorFingerprints.h"
 #include "VendorLibrary.h"
+#include "VendorApplicationPath.h"
 #include <array>
 #include <cstdio>
 #include <cstdlib>
@@ -54,14 +55,16 @@ static void stopBluetoothHelper() {
 static bool stockFirmwareRecognised() {
   bool ok=true;
   for(const tc002::VendorFingerprint* f=tc002::kVendorFingerprints;f->library;++f) {
-    if(tc002::vendorFileTrusted(f->library,f->path)) continue;
+    const std::string path = !std::strcmp(f->library,"libulanzi-bootstrap.so")
+      ? tc002::vendorApplicationPath() : f->path;
+    if(tc002::vendorFileTrusted(f->library,path)) continue;
     // Several hashes may be recorded for one library; any match above already returned.
     bool matched=false;
     for(const tc002::VendorFingerprint* g=tc002::kVendorFingerprints;g->library;++g)
-      if(!std::strcmp(g->library,f->library) && g!=f && tc002::vendorFileTrusted(g->library,g->path)) matched=true;
+      if(!std::strcmp(g->library,f->library) && g!=f && tc002::vendorFileTrusted(g->library,path)) matched=true;
     if(matched) continue;
     std::fprintf(stderr,"Stock firmware check: %s at %s is not a build this port was verified against (expected stock app %s, MCU %s)\n",
-                 f->library,f->path,tc002::kStockApp,tc002::kStockMcu);
+                 f->library,path.c_str(),tc002::kStockApp,tc002::kStockMcu);
     ok=false;
   }
   return ok;

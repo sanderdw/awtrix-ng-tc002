@@ -1,7 +1,7 @@
 // TC002 entry point. This is upstream's src/sim/main_sim.cpp with the simulator's stand-ins
 // replaced by the clock's board, periphery, HTTP routes and script HTTP client. Keep its structure
 // aligned with upstream so their changes can be carried over hunk by hunk.
-// reconciled-with: 73b4582e157484a737397bb0fa616da62212fe9e
+// reconciled-with: 6d6cc64aa6739724d8501199de70c6692cbb2c6c
 #if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -280,6 +280,7 @@ int main(int argc, char** argv) {
   if(cfg.artnet) artnet.begin();
   g_board.setMatrixLayout(cfg.matrixLayout());
   g_canvas = new Canvas(g_board.matrixWidth(), g_board.matrixHeight());
+  g_scriptIcon.setPanelSize(g_board.matrixWidth(), g_board.matrixHeight());
   g_power = new render::PowerAnimator(g_board.matrixWidth(), g_board.matrixHeight());
   g_audio.setTone(g_board.toneSink());
   g_audio.setTrack(g_board.trackSink());
@@ -401,11 +402,8 @@ int main(int argc, char** argv) {
   g_mqtt.setScriptingRunning(cfg.scriptingEnabled);
   display.configure([](const std::string& s, const std::string& p) { g_mqtt.publish(s, p, false); },
                     g_canvas);
-  g_periphery.setButtonHook([](int btn) {
-    static const char* kBtnNames[3] = {"left", "select", "right"};
-    if (g_scripts && btn >= 0 && btn < 3)
-      return g_scripts->handleButton(g_engine->currentAppId(), kBtnNames[btn]);
-    return false;
+  g_periphery.setButtonHook([](int btn, bool pressed) {
+    return g_scripts && g_scripts->handleButtonState(g_engine->currentAppId(), btn, pressed);
   });
 
   g_scriptSvc.http = &g_scriptHttp;
@@ -515,6 +513,7 @@ int main(int argc, char** argv) {
   }
   g_http.setOnAssetsChanged([] {
     g_scriptIcon.invalidate();
+    if (g_pipeline) g_pipeline->invalidateIcons();
     render::clearPaletteCache();
   });
 

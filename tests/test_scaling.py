@@ -76,11 +76,33 @@ def test_icon_text_spacing_and_progress(app):
     px=screen_until(app, lambda px: px[15*52+51]==0x0000ff)
     for y in range(16):
         assert px[y*52:y*52+16]==[0xff0000]*16
+    # The gap stays clear of text; since upstream 1.1.2 the progress bar runs under it.
+    for y in range(14):
         assert px[y*52+16:y*52+18]==[0,0]
     white=[i%52 for i,c in enumerate(px) if c==0xffffff]
     assert white and min(white)>=18
-    assert px[14*52+18:15*52]==[0x0000ff]*34
-    assert px[15*52+18:16*52]==[0x0000ff]*34
+    assert px[14*52+16:15*52]==[0x0000ff]*36
+    assert px[15*52+16:16*52]==[0x0000ff]*36
+
+
+def test_icon_gap_scales_with_the_text(app):
+    notify(app, icon=gif(16,16,[[1]*256]), text='H', textCenter=False, iconGap=3)
+    px=screen_until(app, lambda px: 0xffffff in px)
+    assert min(i%52 for i,c in enumerate(px) if c==0xffffff)==16+3*2
+    for y in range(16):
+        assert px[y*52+16:y*52+22]==[0]*6
+
+
+def test_placed_icons_keep_physical_coordinates(app):
+    # Native 16-row art is not rescaled; a classic tile doubles like the main icon.
+    notify(app, icons=[{'icon':gif(4,16,[[2]*64]),'x':40,'y':0},
+                       {'icon':gif(2,2,[[3]*4]),'x':10,'y':6}])
+    px=screen_until(app, lambda px: px[40]==0x00ff00 and px[6*52+10]==0x0000ff)
+    for y in range(16):
+        assert px[y*52+40:y*52+44]==[0x00ff00]*4
+    for y in range(6,10):
+        assert px[y*52+10:y*52+14]==[0x0000ff]*4
+    assert sum(1 for c in px if c)==4*16+4*4
 
 
 def test_explicit_drawing_keeps_physical_coordinates(app):

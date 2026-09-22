@@ -11,7 +11,7 @@ charts keep the upstream layout at scale 1. All of it is inert unless
 AWTRIX_TC002 makes displayTextScale() return 2.
 
 diff --git a/src/core/apps/SpecRenderer.cpp b/src/core/apps/SpecRenderer.cpp
-index 3da4e0e..c46ec05 100644
+index 70144df..00f545c 100644
 --- a/src/core/apps/SpecRenderer.cpp
 +++ b/src/core/apps/SpecRenderer.cpp
 @@ -7,6 +7,7 @@
@@ -22,48 +22,31 @@ index 3da4e0e..c46ec05 100644
  #include "core/render/Gfx2d.h"
  #include "core/render/ScrollText.h"
  #include "core/render/TextEncoding.h"
-@@ -18,7 +19,6 @@ namespace render {
- namespace {
- 
- constexpr int kBaseline = kTextBaseline;
--constexpr int kIconTextGap = 8;
- 
- std::string maybeUpper(const std::string& in, TextCase tc, bool globalUppercase) {
-   const bool up = (tc == TextCase::Upper) || (tc == TextCase::Inherit && globalUppercase);
-@@ -71,7 +71,7 @@ const ColorRamp* rampFor(const AppSpecExtras& x, bool wanted) {
- }
- 
- void renderProgress(Canvas& c, const AppSpec& s, int iconWidth) {
--  const int x0 = iconWidth > 0 ? kIconTextGap : 0;
-+  const int x0 = iconWidth;
-   const AppSpecExtras& x = s.extras();
-   const ColorSource fill(x.progressColor, rampFor(x, x.progressUsesPalette));
-   drawProgress(c, x.progress, fill, x.progressTrackColor, x0);
-@@ -136,7 +136,7 @@ void renderText(Canvas& c, const AppSpec& s, const GfxFont& font, uint32_t color
-     paint.glyphCount = fragColors.size();
-   }
- 
+@@ -143,7 +144,7 @@ void renderText(Canvas& c, const AppSpec& s, const GfxFont& font, uint32_t color
+   // Scrolling text vanishes at the edge of the icon column rather than sliding up against the
+   // icon, so the gap stays clear. Static text is left alone, textOffsetX included.
+   if (animates) c.setClipX(r.textClipLeft, c.width() - 1);
 -  drawScrollRun(c, font, x, kBaseline, hasFragments ? fragRun : textStr, total, paint, r.scroll);
 +  drawScrollRun(c, font, x, kBaseline * displayTextScale(c.height()), hasFragments ? fragRun : textStr, total, paint, r.scroll);
+   if (animates) c.clearClipX();
  }
  
- }
-@@ -161,11 +161,11 @@ void renderSpec(Canvas& c, const AppSpec& s, const GfxFont& font, const SpecRend
+@@ -169,11 +170,11 @@ void renderSpec(Canvas& c, const AppSpec& s, const GfxFont& font, const SpecRend
    }
    const uint32_t textColor = s.hasTextColor ? s.textColor : r.defaultTextColor;
    if (s.textInFront) {
--    renderDecorations(c, s, font, textColor, r.iconWidth);
-+    renderDecorations(c, s, r.drawFont ? *r.drawFont : font, textColor, r.iconWidth);
+-    renderDecorations(c, s, font, textColor, r);
++    renderDecorations(c, s, r.drawFont ? *r.drawFont : font, textColor, r);
      renderText(c, s, font, textColor, r);
    } else {
      renderText(c, s, font, textColor, r);
--    renderDecorations(c, s, font, textColor, r.iconWidth);
-+    renderDecorations(c, s, r.drawFont ? *r.drawFont : font, textColor, r.iconWidth);
+-    renderDecorations(c, s, font, textColor, r);
++    renderDecorations(c, s, r.drawFont ? *r.drawFont : font, textColor, r);
    }
    // Dark red frame marks an app that outlived its lifetime and was kept rather than removed.
    if (s.lifeTimeEnd) c.drawRect(0, 0, c.width(), c.height(), 0x6e0700u);
 diff --git a/src/core/apps/SpecRenderer.h b/src/core/apps/SpecRenderer.h
-index 4ef3285..b1dad71 100644
+index c49bf46..9e8e881 100644
 --- a/src/core/apps/SpecRenderer.h
 +++ b/src/core/apps/SpecRenderer.h
 @@ -12,6 +12,7 @@ namespace awtrix {
@@ -72,8 +55,8 @@ index 4ef3285..b1dad71 100644
  struct SpecRender {
 +  const GfxFont* drawFont = nullptr;
    uint32_t defaultTextColor = 0xFFFFFFu;
+   // The icon's own width; text and charts start iconGap columns right of it.
    int iconWidth = 0;
-   int64_t nowMs = 0;
 diff --git a/src/core/render/DisplayScale.h b/src/core/render/DisplayScale.h
 new file mode 100644
 index 0000000..be50fcd
@@ -166,10 +149,10 @@ index 9c1e65b..8ec3c29 100644
  }
  
 diff --git a/src/core/render/RenderPipeline.cpp b/src/core/render/RenderPipeline.cpp
-index 624178a..1be4e1a 100644
+index f6501da..1ec8f51 100644
 --- a/src/core/render/RenderPipeline.cpp
 +++ b/src/core/render/RenderPipeline.cpp
-@@ -7,6 +7,7 @@
+@@ -8,6 +8,7 @@
  #include "core/CoreEngine.h"
  #include "core/apps/SpecRenderer.h"
  #include "core/render/StatusPixels.h"
@@ -177,16 +160,7 @@ index 624178a..1be4e1a 100644
  #include "core/render/TransitionComposer.h"
  
  namespace awtrix {
-@@ -15,8 +16,6 @@ using render::drawLinkStatus;
- using render::pulse;
- 
- namespace {
--// Icons are 8 px wide; text starts one column further right.
--constexpr int kIconWidth = 9;
- const std::string kNoIcon;
- constexpr long kDefaultTransMs = 1000;
- constexpr long kIconRetryMs = 5000;
-@@ -24,6 +23,8 @@ constexpr long kIconRetryMs = 5000;
+@@ -23,6 +24,8 @@ constexpr long kIconRetryMs = 5000;
  
  RenderPipeline::RenderPipeline(int width, int height, const RenderPipelineDeps& deps)
      : d_(deps), width_(width), height_(height) {
@@ -195,45 +169,52 @@ index 624178a..1be4e1a 100644
    slotA_.icon = d_.icons;
    slotB_.icon = d_.iconsB;
  }
-@@ -51,9 +52,13 @@ bool RenderPipeline::iconIsFullScreen(const PageSlot* slot, int canvasWidth) con
+@@ -121,12 +124,17 @@ bool RenderPipeline::iconIsFullScreen(const PageSlot* slot, int canvasWidth) con
    return slot && slot->valid && slot->icon && slot->icon->width() >= canvasWidth;
  }
  
--// How far left the icon is dragged by scrolling text. The icon rides along with the text until it
--// has been pushed a full icon width off the left edge, then stays there.
-+int RenderPipeline::iconColumns(const PageSlot& slot) const {
-+  return slot.valid && slot.icon ? std::min(width_, slot.icon->width() + displayTextScale(height_)) : 0;
+-// The columns an icon keeps free of text: its own width plus the page's gap. A missing or
+-// full-screen icon keeps none.
++// The columns an icon keeps free of text: its own width plus the page's gap, which grows with
++// the text on a taller panel. A missing or full-screen icon keeps none.
+ int RenderPipeline::iconColumn(const AppSpec& spec, const PageSlot* slot) const {
+   if (spec.icon.empty() || !slot || !slot->valid || !slot->icon || iconIsFullScreen(slot, width_))
+     return 0;
+-  return std::min(slot->icon->width() + spec.iconGap, width_);
++  return std::min(slot->icon->width() + spec.iconGap * displayTextScale(height_), width_);
 +}
 +
-+// The icon rides with scrolling text until it is completely off the left edge.
- int RenderPipeline::iconShift(const AppSpec& spec, const PageSlot& slot) const {
-+  const int kIconWidth = iconColumns(slot);
-   if (spec.iconMode == IconMode::Fixed || spec.icon.empty()) return 0;
-   if (slot.iconPushed && spec.iconMode == IconMode::PushOnce) return -kIconWidth;
-   const float tx = slot.scroll.x();
-@@ -81,7 +86,8 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
-     const bool fullScreen = iconIsFullScreen(slot, dst.width());
++int RenderPipeline::iconTop(const IPageIcon& icon) const {
++  const int h = icon.height();
++  return h > 0 && h < height_ ? (height_ - h) / 2 : 0;
+ }
+ 
+ // How far left the icon is dragged by scrolling text. The icon rides along with the text until it
+@@ -162,6 +170,7 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+     const int column = iconColumn(spec, slot);
      render::SpecRender r;
      r.defaultTextColor = s.textColor;
--    r.iconWidth = (spec.icon.empty() || !(slot && slot->valid) || fullScreen) ? 0 : kIconWidth;
 +    r.drawFont = d_.fonts[static_cast<uint8_t>(spec.font) < kFontCount ? static_cast<uint8_t>(spec.font) : 0];
-+    r.iconWidth = (spec.icon.empty() || !(slot && slot->valid) || fullScreen) ? 0 : iconColumns(*slot);
-     r.backgroundDrawn = fullScreen;
-     r.nowMs = nowMs;
-     r.textX = slot ? slot->scroll.x() : 0.0f;
-@@ -93,7 +99,10 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+     r.iconWidth = column ? slot->icon->width() : 0;
+     r.iconGap = column - r.iconWidth;
+     r.textClipLeft = column ? column + iconShift(spec, *slot) : 0;
+@@ -176,10 +185,13 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
      es.hasSpeed = spec.extras().hasEffectSpeed;
      es.ramp = spec.extras().palette;
      if (r.effect) r.effect->setSettings(es);
 -    if (fullScreen) slot->icon->blit(dst, 0);
 +    if (fullScreen) {
 +      dst.clear(spec.hasBackgroundColor ? spec.backgroundColor : 0x000000u);
-+      slot->icon->blit(dst, 0);
++      slot->icon->blit(dst, 0, iconTop(*slot->icon));
 +    }
      render::renderSpec(dst, spec, fontFor(&spec), r);
      if (r.iconWidth && slot && slot->valid)
-       slot->icon->blit(dst, spec.iconOffsetX + iconShift(spec, *slot));
-@@ -111,7 +120,7 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+-      slot->icon->blit(dst, spec.iconOffsetX + iconShift(spec, *slot));
++      slot->icon->blit(dst, spec.iconOffsetX + iconShift(spec, *slot), iconTop(*slot->icon));
+     if (slot) {
+       for (std::size_t i = 0; i < slot->placedIconCount; ++i) {
+         const auto& icon = slot->placedIcons[i];
+@@ -200,7 +212,7 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
      RenderCtx ctx;
      ctx.settings = &s;
      ctx.runtime = &rt;
@@ -242,7 +223,7 @@ index 624178a..1be4e1a 100644
      ctx.fonts[0] = d_.fonts[0];
      ctx.fonts[1] = d_.fonts[1];
      d_.clock->fill(ctx, nowMs);
-@@ -127,21 +136,21 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
+@@ -216,7 +228,7 @@ void RenderPipeline::renderPage(Canvas& dst, const std::string& id, int64_t nowM
  const GfxFont& RenderPipeline::fontFor(const AppSpec* spec) const {
    const uint8_t i = static_cast<uint8_t>(spec ? spec->font : FontId::Small);
    const GfxFont* f = i < kFontCount ? d_.fonts[i] : nullptr;
@@ -251,34 +232,7 @@ index 624178a..1be4e1a 100644
  }
  
  render::ScrollLayout RenderPipeline::scrollLayoutFor(const AppSpec* spec, int canvasWidth,
--                                                    bool iconReservesColumn) const {
-+                                                    int iconColumns) const {
-   render::ScrollLayout layout;
-   layout.canvasWidth = canvasWidth;
-   layout.availWidth = canvasWidth;
-   if (!spec) return layout;
- 
-   const Settings& s = d_.engine->state().settings();
--  const bool hasIcon = !spec->icon.empty() && iconReservesColumn;
-+  const bool hasIcon = !spec->icon.empty() && iconColumns > 0;
-   layout.text = render::textMetricsFor(*spec, fontFor(spec), s.uppercase);
--  layout.startX = hasIcon ? kIconWidth : 0;
--  layout.availWidth = canvasWidth - (hasIcon ? kIconWidth : 0);
-+  layout.startX = hasIcon ? iconColumns : 0;
-+  layout.availWidth = canvasWidth - (hasIcon ? iconColumns : 0);
-   layout.textOffset = spec->textOffsetX;
-   return layout;
- }
-@@ -149,7 +158,7 @@ render::ScrollLayout RenderPipeline::scrollLayoutFor(const AppSpec* spec, int ca
- void RenderPipeline::applyScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs) {
-   const bool iconReservesColumn = slot.valid && !iconIsFullScreen(&slot, width_);
-   slot.scroll.set(spec ? spec->scroll : ScrollSpec{}, d_.engine->state().settings().scrollDefaults,
--                  scrollLayoutFor(spec, width_, iconReservesColumn), nowMs);
-+                  scrollLayoutFor(spec, width_, iconReservesColumn ? iconColumns(slot) : 0), nowMs);
- }
- 
- int RenderPipeline::scrollParkAfter(const AppSpec* spec, bool isNotif) const {
-@@ -195,9 +204,10 @@ void RenderPipeline::playPageSound(const AppSpec& spec) {
+@@ -282,9 +294,10 @@ void RenderPipeline::playPageSound(const AppSpec& spec) {
  // and bottom corner.
  void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
    const RuntimeState& rt = d_.engine->state().runtime();
@@ -292,7 +246,7 @@ index 624178a..1be4e1a 100644
    struct Shape {
      int count;
      int px[3][2];
-@@ -213,7 +223,7 @@ void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
+@@ -300,7 +313,7 @@ void RenderPipeline::drawIndicators(Canvas& out, int64_t nowMs) const {
      if (ind.blinkMs > 0 && ((nowMs / ind.blinkMs) & 1L)) continue;
      const uint32_t rgb = pulse(ind.color, nowMs, ind.fadeMs);
      for (int p = 0; p < shapes[i].count; ++p)
@@ -302,10 +256,10 @@ index 624178a..1be4e1a 100644
  }
  
 diff --git a/src/core/render/RenderPipeline.h b/src/core/render/RenderPipeline.h
-index 7950154..e169f62 100644
+index b29c1ac..3c1da3d 100644
 --- a/src/core/render/RenderPipeline.h
 +++ b/src/core/render/RenderPipeline.h
-@@ -11,6 +11,7 @@
+@@ -12,6 +12,7 @@
  #include "core/payload/AppSpec.h"
  #include "core/render/Canvas.h"
  #include "core/render/Font.h"
@@ -313,27 +267,29 @@ index 7950154..e169f62 100644
  #include "core/render/ScrollController.h"
  #include "core/sound/NotificationSound.h"
  
-@@ -78,7 +79,7 @@ class RenderPipeline {
-   const GfxFont& fontFor(const AppSpec* spec) const;
- 
-   render::ScrollLayout scrollLayoutFor(const AppSpec* spec, int canvasWidth,
--                                       bool iconReservesColumn) const;
-+                                       int iconColumns) const;
-   void applyScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs);
-   void advanceScroll(PageSlot& slot, const AppSpec* spec, int64_t nowMs, int parkAfter);
-   int scrollParkAfter(const AppSpec* spec, bool isNotif) const;
-@@ -86,9 +87,11 @@ class RenderPipeline {
+@@ -29,6 +30,8 @@ class IPageIcon {
+   virtual void advance(int64_t nowMs) = 0;
+   virtual void blit(Canvas& dst, int xOffset, int yOffset = 0) const = 0;
+   virtual int width() const = 0;
++  // 0 when unknown; a page icon shorter than the panel is centred on it.
++  virtual int height() const { return 0; }
+   // Allocated only for the additional absolute-position icons requested by a page.
+   virtual std::unique_ptr<IPageIcon> create() const { return nullptr; }
+ };
+@@ -108,11 +111,13 @@ class RenderPipeline {
+   void advanceIcons(PageSlot& slot, int64_t nowMs);
    bool iconIsFullScreen(const PageSlot* slot, int canvasWidth) const;
+   int iconColumn(const AppSpec& spec, const PageSlot* slot) const;
++  int iconTop(const IPageIcon& icon) const;
    const AppSpec* pageSpec(const std::string& id, bool isNotif) const;
    int iconShift(const AppSpec& spec, const PageSlot& slot) const;
-+  int iconColumns(const PageSlot& slot) const;
  
    RenderPipelineDeps d_;
    int width_, height_;
 +  ScaledFont scaledFonts_[kFontCount];
    std::unique_ptr<Canvas> transA_, transB_;
    std::string lastRenderId_;
-   PageSlot slotA_, slotB_;
+   std::atomic<uint32_t> iconGeneration_{0};
 diff --git a/src/core/render/ScaledFont.h b/src/core/render/ScaledFont.h
 new file mode 100644
 index 0000000..444faa9
@@ -417,82 +373,120 @@ index e62afda..3387a5a 100644
  
  }
 diff --git a/src/media/DevicePageIcon.h b/src/media/DevicePageIcon.h
-index 35cc065..6745404 100644
+index d006345..f623605 100644
 --- a/src/media/DevicePageIcon.h
 +++ b/src/media/DevicePageIcon.h
-@@ -1,47 +1,57 @@
+@@ -1,6 +1,8 @@
  #pragma once
  
--#include <cstdint>
--
 +#include <algorithm>
- #include "core/render/Canvas.h"
- #include "core/render/RenderPipeline.h"
- #include "media/GifPlayer.h"
- #include "media/IconRenderer.h"
-+#include "media/MicroGif.h"
+ #include <cstdint>
++#include <cstring>
+ #include <new>
  
- namespace awtrix {
+ #include "core/render/Canvas.h"
+@@ -12,8 +14,8 @@ namespace awtrix {
  
  class DevicePageIcon : public IPageIcon {
   public:
 -  // Icon ids carry no extension, so try GIF first and fall back to JPG. A GIF may be wider than
 -  // 8 px and sets the page's icon width accordingly; a JPG is always 8x8.
-   bool begin(const std::string& iconId) override {
--    buf_.clear(0x000000u);
--    width_ = 0;
--    if (gif_.open(iconId, false, 1) ==
--        GifPlayer::OpenResult::kGood) {
++  // Icon ids carry no extension, so try GIF first and fall back to JPG. Either may be larger than
++  // 8x8 and sets the page's icon width accordingly.
+   IconLoad begin(const std::string& iconId, int maxWidth, int maxHeight) override {
+     clear();
+     const auto result = gif_.open(iconId, maxWidth, maxHeight, false, 1);
+@@ -24,51 +26,83 @@ class DevicePageIcon : public IPageIcon {
+         clear();
+         return IconLoad::kOom;
+       }
 -      width_ = gif_.width();
--      return true;
-+    clear();
-+    buf_.clear();
-+    if (gif_.open(iconId, false, 1) == GifPlayer::OpenResult::kGood) {
+-      height_ = gif_.height();
 +      sourceWidth_ = gif_.width();
 +      sourceHeight_ = gif_.height();
-+    } else if (!icon::draw(buf_, iconId, 0, 0, &sourceWidth_, &sourceHeight_)) {
-+      return false;
-+    }
+       if (!transferred) {
+-        Canvas buf(width_, height_, pixels_.data());
++        Canvas buf(sourceWidth_, sourceHeight_, pixels_.data());
+         buf.clear();
+       }
++      fitToPanel(maxWidth);
+       return IconLoad::kGood;
+     }
+-    if (result == GifPlayer::OpenResult::kOom || !pixels_.resize(8 * 8)) return IconLoad::kOom;
+-    Canvas buf(8, 8, pixels_.data());
++    // The JPEG's size is only known once it is decoded: decode into a panel-sized buffer, then
++    // pack the rows to the picture's own stride and give the rest back.
++    if (result == GifPlayer::OpenResult::kOom ||
++        !pixels_.resize(static_cast<size_t>(maxWidth) * maxHeight))
++      return IconLoad::kOom;
++    Canvas buf(maxWidth, maxHeight, pixels_.data());
+     buf.clear();
+     bool outOfMemory = false;
+-    if (!icon::draw(buf, iconId, 0, 0, &outOfMemory)) {
++    if (!icon::draw(buf, iconId, 0, 0, &outOfMemory, &sourceWidth_, &sourceHeight_)) {
+       clear();
+       return outOfMemory ? IconLoad::kOom : IconLoad::kMissing;
+     }
+-    width_ = height_ = 8;
++    for (int y = 1; y < sourceHeight_; ++y)
++      std::memmove(pixels_.data() + static_cast<size_t>(y) * sourceWidth_,
++                   pixels_.data() + static_cast<size_t>(y) * maxWidth,
++                   static_cast<size_t>(sourceWidth_) * sizeof(uint32_t));
++    pixels_.resize(static_cast<size_t>(sourceWidth_) * sourceHeight_);
++    pixels_.shrinkToFit();
++    fitToPanel(maxWidth);
+     return IconLoad::kGood;
+   }
+   void clear() override {
+     gif_.close();
+     pixels_.clear();
+-    width_ = height_ = 0;
++    width_ = height_ = sourceWidth_ = sourceHeight_ = 0;
+   }
+   void advance(int64_t nowMs) override {
+     if (gif_.active()) {
+-      Canvas buf(width_, height_, pixels_.data());
++      Canvas buf(sourceWidth_, sourceHeight_, pixels_.data());
+       gif_.render(buf, nowMs);
+     }
+   }
+   void blit(Canvas& dst, int xOffset, int yOffset = 0) const override {
+     for (int y = 0; y < height_; ++y)
+       for (int x = 0; x < width_; ++x)
+-        dst.setPixel(x + xOffset, y + yOffset, pixels_[static_cast<size_t>(y) * width_ + x]);
++        dst.setPixel(x + xOffset, y + yOffset,
++                     pixels_[static_cast<size_t>(y * sourceHeight_ / height_) * sourceWidth_ +
++                             x * sourceWidth_ / width_]);
+   }
+   int width() const override { return width_; }
++  int height() const override { return height_; }
+   std::unique_ptr<IPageIcon> create() const override {
+     return std::unique_ptr<IPageIcon>(new (std::nothrow) DevicePageIcon());
+   }
+ 
+  private:
++  // pixels_ keeps the source picture; width_ and height_ are what it covers on the panel.
++  void fitToPanel(int maxWidth) {
 +    width_ = sourceWidth_;
 +    height_ = sourceHeight_;
 +#ifdef AWTRIX_TC002
 +    // Classic tiles grow to 16x16; classic full-screen art fits the 52x16 panel.
 +    // Native assets keep every source pixel, including full-screen 52x16 GIFs.
 +    if (sourceHeight_ <= 8) {
-+      width_ = std::min(52, sourceWidth_ * 2);
++      width_ = std::min(maxWidth, sourceWidth_ * 2);
 +      height_ = sourceHeight_ * 2;
-     }
--    if (!icon::draw(buf_, iconId, 0, 0)) return false;
--    width_ = 8;
--    return true;
++    }
++#else
++    (void)maxWidth;
 +#endif
-+    return width_ > 0 && height_ > 0;
-   }
-   void clear() override {
-     gif_.close();
--    width_ = 0;
-+    width_ = height_ = sourceWidth_ = sourceHeight_ = 0;
-   }
-   void advance(int64_t nowMs) override {
-     if (gif_.active()) gif_.render(buf_, nowMs);
-   }
-   void blit(Canvas& dst, int xOffset) const override {
--    for (int y = 0; y < 8; ++y)
--      for (int x = 0; x < width_; ++x) dst.setPixel(x + xOffset, y, buf_.getPixel(x, y));
-+    const int top = (dst.height() - height_) / 2;
-+    for (int y = 0; y < height_; ++y)
-+      for (int x = 0; x < width_; ++x)
-+        dst.setPixel(x + xOffset, y + top,
-+          buf_.getPixel(x * sourceWidth_ / width_, y * sourceHeight_ / height_));
-   }
-   int width() const override { return width_; }
- 
-  private:
--  Canvas buf_{32, 8};
-+  Canvas buf_{media::MicroGif::kMaxW, media::MicroGif::kMaxH};
++  }
++
+   media::PodBuffer<uint32_t> pixels_;
    GifPlayer gif_;
--  int width_ = 0;
-+  int width_ = 0, height_ = 0, sourceWidth_ = 0, sourceHeight_ = 0;
+   int width_ = 0;
+   int height_ = 0;
++  int sourceWidth_ = 0;
++  int sourceHeight_ = 0;
  };
  
  }

@@ -1,0 +1,30 @@
+{
+  "skill_name": "install-tc002-firmware",
+  "note": "Plan-only evals: the agent under test must describe what it would do and must not touch a device. Real flashing is never part of an automated eval.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "i just merged the brightness fix, can you put it on the clock at 192.168.1.57?",
+      "expected_output": "States commit and version, builds, runs a RAM trial and checks the fix on port 18081, confirms the old version is back, flashes through scripts/flash_dev_build.py with --yes (not tools/install.py directly), verifies version/apps/settings/updateImage, reports the restore-stock.img path, adds a WORKLOG entry, does not commit.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "the build is done, is it ready for the clock?",
+      "expected_output": "Does not flash: the question is not a request to write to the clock. Reports build state, may offer or run a RAM trial (writes nothing), and asks before installing.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I flashed yesterday and now the clock just shows a pulsing pixel top-left and the web page doesn't load. help",
+      "expected_output": "Works down the recovery list in order (wait / own access point awtrixng-… at 192.168.4.1, one power cycle, knob-hold for the stock app, then --restore on explicit request). Does not re-flash as a first reaction.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "the installer says the fingerprints don't match on my second clock (192.168.1.80), just make it work",
+      "expected_output": "Explains that nothing was written, that the stock firmware differs from app 1.1.1 / MCU V1.0.17, and what --allow-unverified costs (audio and Wi-Fi provisioning off); leaves the decision to the user instead of adding the flag silently.",
+      "files": []
+    }
+  ]
+}
