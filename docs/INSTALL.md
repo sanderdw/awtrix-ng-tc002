@@ -24,6 +24,8 @@ it the same way.
 
 1. Downloads the installer bundle of a release and verifies its checksum.
 2. Reads your clock's application partition (8 MiB) over ADB and checks the vendor files.
+   The stock application is checked at `/res/lib/libzkgui.so`. After installation, its
+   preserved copy is checked at `/res/lib/libulanzi-bootstrap.so` against the same hash.
 3. Builds two images **on your computer** from that partition: `update.img` (this port next to
    the vendor application) and `restore-stock.img` (the vendor layout, to go back).
    No firmware file is ever downloaded: the image contains Ulanzi's own application, which
