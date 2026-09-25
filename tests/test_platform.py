@@ -195,3 +195,31 @@ def test_vendor_status_lists_the_files_the_port_depends_on(app):
     assert app['requiredSymbols'] == ['onEasyUIInit', 'onEasyUIDeinit', 'onStartupApp', '_ZN4base13wifiOnAndWaitEi']
     assert app['missingSymbols'] == []
     assert 'requiredSymbols' not in status['libraries']['libmi_ao.so']
+
+
+def fat_script():
+    # Upstream's fatApp() from test_scripthost: about 9 KB of Berry heap per installed copy.
+    body = ''.join(f'def m{i}(a, b)\n  var t = a * {i} + b\n  var u = "literal {i} padding"\n  return t + size(u)\nend\n'
+                   for i in range(40))
+    return ('class App\n' + body + 'def draw() end\nend\nreturn App()').encode()
+
+
+def test_scripts_share_a_one_mebibyte_heap(app):
+    # Issue #9: with the ESP32's 96 KB the ninth of these scripts was refused, on a clock with
+    # megabytes free. The budget still holds; it is just sized for the clock.
+    device = app('/api/v1/device')
+    assert (device['scriptHeapPool'], device['scriptHeapBudgetBytes']) == ('internal', 1024 * 1024)
+    installed, refusal = 0, None
+    for i in range(200):
+        request = urllib.request.Request(f'{app.base_url}/api/v1/apps/script/fat{i}', data=fat_script(),
+                                         method='PUT', headers={'Content-Type': 'text/plain'})
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                response.read()
+        except urllib.error.HTTPError as error:
+            refusal = (error.code, json.load(error)['error'])
+            break
+        installed += 1
+    assert installed >= 40
+    assert refusal is not None and refusal[0] == 507 and refusal[1]['code'] == 'insufficientStorage'
+    assert '1048576 byte internal budget' in refusal[1]['message']

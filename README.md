@@ -151,8 +151,9 @@ The current candidate is **1.1.2-tc002.3** (upstream 1.1.2). It installs on stoc
 other than 1.1.1 when the Ulanzi application defines the launcher's entry points
 ([#8](https://github.com/sanderdw/awtrix-ng-tc002/issues/8),
 [#6](https://github.com/sanderdw/awtrix-ng-tc002/issues/6)), makes `--allow-unverified` and
-`--restore` pass `--force` to the update helper, and reports each vendor file's status. It has
-not run on a clock yet. 1.1.2-tc002.2 publishes knob turns over MQTT
+`--restore` pass `--force` to the update helper, and reports each vendor file's status. Berry
+scripts get a 1 MiB heap instead of 96 KB ([#9](https://github.com/sanderdw/awtrix-ng-tc002/issues/9)).
+It has not run on a clock yet. 1.1.2-tc002.2 publishes knob turns over MQTT
 as `cw` / `ccw` on `<prefix>/state/knob`, with a matching Home Assistant event entity
 ([issue #4](https://github.com/sanderdw/awtrix-ng-tc002/issues/4)), and adds a Buy me a coffee
 link for the port. These changes ran on the test clock on 2026-09-25 against EMQX and Home
@@ -244,6 +245,10 @@ locally.
   native assets through 52 × 16; it draws their original dimensions, so scripts
   can position multiple icons precisely. Existing scripts with hardcoded 32 × 8
   layouts need their coordinates updated; use `width()` and `height()`.
+- Berry scripts share a 1 MiB heap (`scriptHeapBudgetBytes` in `/api/v1/device`) instead of
+  the ESP32's 96 KB, which refused the sixth average script although the clock has 12 to 15 MB
+  available ([#9](https://github.com/sanderdw/awtrix-ng-tc002/issues/9)). Past 1 MiB, new
+  installs are refused with `insufficientStorage` until a script is removed.
 - The live web preview has the correct 52:16 aspect ratio. Progress bars and
   status indicators are two pixels thick; dense bar charts retain their final
   sample and fill the available width.

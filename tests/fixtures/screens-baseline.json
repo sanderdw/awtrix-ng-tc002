@@ -8452,7 +8452,7 @@
   "updateImage": "",
   "scriptingRunning": true,
   "scriptHeapPool": "internal",
-  "scriptHeapBudgetBytes": 98304,
+  "scriptHeapBudgetBytes": 1048576,
   "brightness": 255,
   "matrixPower": true,
   "indicators": [

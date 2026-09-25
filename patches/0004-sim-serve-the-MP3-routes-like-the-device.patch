@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
 Date: Wed, 16 Sep 2026 16:19:35 +0200
-Subject: [PATCH 4/9] sim: serve the MP3 routes like the device
+Subject: [PATCH 04/10] sim: serve the MP3 routes like the device
 
 /api/v1/audio/mp3 list, upload and delete exist on the device's HttpApiServer;
 the simulator answered 404, so the web UI's audio page could not be exercised.

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
 Date: Wed, 16 Sep 2026 16:19:35 +0200
-Subject: [PATCH 5/9] render: scale text and decorations on a 16-row panel
+Subject: [PATCH 05/10] render: scale text and decorations on a 16-row panel
  (AWTRIX_TC002)
 
 Fonts are expanded 2x so 32 by 8 layouts keep their proportions on 52 by 16;

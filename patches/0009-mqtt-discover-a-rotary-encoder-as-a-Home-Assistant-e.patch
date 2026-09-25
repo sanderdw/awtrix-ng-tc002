@@ -1,8 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
 Date: Thu, 24 Sep 2026 23:50:34 +0200
-Subject: [PATCH 9/9] mqtt: discover a rotary encoder as a Home Assistant event
- entity
+Subject: [PATCH 09/10] mqtt: discover a rotary encoder as a Home Assistant
+ event entity
 
 A knob's detents are events, not held state, so they cannot ride the retained
 state/buttons/* levels. Boards that report hasEncoder() publish each detent as

@@ -34,6 +34,10 @@ if(NOT TC002_FINGERPRINT_RESULT EQUAL 0)
 endif()
 # The clock's panel geometry, applied through the build-time knobs the patch series adds upstream.
 set(TC002_PANEL AWTRIX_MATRIX_HEIGHT=16 AWTRIX_PANEL_WIDTH=52)
+# The shared Berry heap may grow to 1 MiB before new scripts are refused, instead of the ESP32's
+# 96 KB (issue #9). The clock has 12 to 15 MB available while AWTRIX runs, and the installer
+# stages about 4.5 MB in its RAM-backed /tmp, so this stays a fixed, modest share.
+set(TC002_SCRIPT_HEAP AWTRIX_SCRIPT_HEAP_BUDGET_BYTES=1048576)
 file(GLOB_RECURSE CORE CONFIGURE_DEPENDS ${U}/src/core/*.cpp ${U}/src/core/*.c)
 file(GLOB SIM CONFIGURE_DEPENDS ${U}/src/sim/*.cpp)
 list(FILTER SIM EXCLUDE REGEX "main_sim\\.cpp$")
@@ -56,7 +60,7 @@ target_include_directories(tc002-update PRIVATE src/tc002 ${TC002_GENERATED})
 # src/tc002/compat comes before upstream's sim/compat so the clock's WiFi and socket shims win.
 target_include_directories(awtrix-tc002 PRIVATE src/tc002 src/tc002/compat src/updater src/loader ${TC002_GENERATED}
   ${U}/src ${U}/src/sim/compat vendor/base64/src vendor/PubSubClient/src)
-target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL}
+target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL} ${TC002_SCRIPT_HEAP}
   AWTRIX_NG_VERSION="1.1.2-tc002.3" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(awtrix-tc002 PRIVATE -Wall -Wextra -Wno-unused-parameter
   -ffunction-sections -fdata-sections)

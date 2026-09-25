@@ -722,3 +722,30 @@ Not run on a clock. On the 1.1.1 test clock:
 - `/api/v1/tc002/vendor` should show `missingSymbols: []`.
 
 The compatible path on real 1.0.1, 1.0.8 and 1.1.3 clocks waits for the reporters.
+
+## 2026-09-25: script heap budget sized for the clock (issue #9, 1.1.2-tc002.3)
+
+On the TC002 the Berry VM uses the host allocator (`ScriptHeapNative.cpp`, plain malloc), and its
+budget was upstream's ESP32 internal-RAM value, 96 KB. The clock reports 12 to 15 MB available
+while AWTRIX runs, yet a sixth average script was refused with `insufficientStorage` (#9). The
+reporter ran a 1 MiB budget on a SoC 1.0.1 clock: six scripts together, 42 FPS, free memory down
+by about 330 KB.
+
+Patch 0010 makes the budget a build-time setting, `AWTRIX_SCRIPT_HEAP_BUDGET_BYTES`. The default
+stays 96 KB, so upstream, the simulator and ESP32 builds are unchanged. `CMakeLists.txt` sets
+1 MiB for the clock.
+
+The budget only refuses new installs once the shared heap is past it; running scripts can still
+grow. It is not derived from free memory like upstream's PSRAM path (half the free pool), which
+would be about 6 MB here. The adb installer stages about 4.5 MB in the RAM-backed `/tmp`, and the
+clock has no swap, so a fixed, modest share is safer.
+
+Measured on the host with upstream's `fatApp()` test script (about 9 KB of heap each): at 96 KB
+the tenth install was refused ("shared Berry heap 101153 bytes is over the 98304 byte internal
+budget"); at 1 MiB, 112 install before the budget refuses. `test_scripts_share_a_one_mebibyte_heap`
+installs until refused and checks both the count and the message. The golden device state now
+records `scriptHeapBudgetBytes` 1048576.
+
+Not run on a clock. `growthBudget()` on this build is still unbounded (upstream's host
+behaviour), so buffers scripts request (HTTP bodies, shared state) have no memory-based ceiling
+on the clock; that is a separate change.
