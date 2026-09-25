@@ -20,6 +20,13 @@ MCU V1.0.17), builds the firmware image and a recovery image on your computer, r
 preflight on the clock, and flashes only after you type `flash`. It never downloads a
 firmware image, because the image contains Ulanzi's own application. About three minutes.
 
+This installs the newest **stable** release. To install a specific release instead, including a
+pre-release such as the knob-over-MQTT build, name its tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- --version v1.1.2-tc002.2 CLOCK_IP
+```
+
 - Back to stock: add `--restore` to the same line.
 - Stuck clock: hold the knob while powering on to start the stock app.
 - Just looking: add `--build-only`, or use the [RAM trial](#try-from-ram-first), which flashes nothing.

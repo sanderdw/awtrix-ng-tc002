@@ -10,6 +10,20 @@ Replace `CLOCK_IP` with the clock's address (the stock app shows it, or look in 
 If you prefer not to pipe into a shell, download `install.sh` from a release, read it, and run
 it the same way.
 
+## Choosing a release
+
+Without options the installer takes the newest **stable** release, the one GitHub marks as
+Latest. Pre-releases are only installed when you ask for one by tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- --version v1.1.2-tc002.2 CLOCK_IP
+```
+
+`--version` may come before or after `CLOCK_IP`; the tag is listed on the
+[releases page](https://github.com/sanderdw/awtrix-ng-tc002/releases). The environment variable
+`AWTRIX_TC002_VERSION=TAG` does the same. The installer prints which release it downloads and
+whether it is the stable one or the one you requested.
+
 ## What you need
 
 - `python3` (3.8 or newer), `curl`, `unzip`, and **squashfs-tools** (`apt install squashfs-tools`
@@ -22,7 +36,7 @@ it the same way.
 
 ## What it does
 
-1. Downloads the installer bundle of a release and verifies its checksum.
+1. Downloads the installer bundle of the chosen release and verifies its checksum.
 2. Reads your clock's application partition (8 MiB) over ADB and checks the vendor files.
    The stock application is checked at `/res/lib/libzkgui.so`. After installation, its
    preserved copy is checked at `/res/lib/libulanzi-bootstrap.so` against the same hash.
