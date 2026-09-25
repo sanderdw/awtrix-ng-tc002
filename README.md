@@ -132,11 +132,15 @@ storage and are limited to one at a time.
 
 ## Current status
 
-The current candidate is **1.1.2-tc002.1** (upstream 1.1.2). It carries the port onto upstream's
-Modbus TCP, script timers, extended button events, multi-icon pages and panel-sized GIFs, and has
-not yet been installed on a clock; the host test suite and golden screens pass. Upstream's new
-in-browser firmware download is not offered: it serves ESP32 images, and the clock keeps updating
-from an `.img` file. Its predecessor, 1.1.1-tc002.5 (upstream 1.1.1), restructured the source tree,
+The current candidate is **1.1.2-tc002.2** (upstream 1.1.2). It publishes knob turns over MQTT
+as `cw` / `ccw` on `<prefix>/state/knob`, with a matching Home Assistant event entity
+([issue #4](https://github.com/sanderdw/awtrix-ng-tc002/issues/4)), and adds a Buy me a coffee
+link for the port. These changes ran on the test clock on 2026-09-25 against EMQX and Home
+Assistant; [docs/VALIDATION.md](docs/VALIDATION.md) has not been run on this build.
+1.1.2-tc002.1 carried the port onto upstream's Modbus TCP, script timers, extended button events,
+multi-icon pages and panel-sized GIFs, and was installed on the test clock on 2026-09-20. Upstream's
+new in-browser firmware download is not offered: it serves ESP32 images, and the clock keeps
+updating from an `.img` file. 1.1.1-tc002.5 (upstream 1.1.1) restructured the source tree,
 hardened the HTTP server and added the launcher fallback, the vendor fingerprint gate and the
 one-line installer. An earlier candidate,
 1.1.0-tc002.7, was installed and verified after a Linux reboot on the test clock on

@@ -563,3 +563,93 @@ Two installer defects met on the way, neither of which wrote anything wrong:
 Not run on this build: docs/VALIDATION.md (cold boots, knob-hold fallback, three-strikes fallback,
 restore-stock), `on_button_event()` from the physical knob and select button, Modbus reads, JPG
 icons larger than 8x8.
+
+## 2026-09-24: knob turns over MQTT (issue #4)
+
+Issue #4: knob turns reached neither MQTT nor Home Assistant. With block buttons on, a turn left no
+trace at all. A detent does not fit upstream's `state/buttons/*`. Those topics carry retained
+levels, `buttonsDue()` merges a press and release that happen in the same tick, and on this clock
+left and right are the −/+ rocker. So each detent now goes out on a new topic,
+`<prefix>/state/knob`, as a non-retained `cw` or `ccw`. That follows the `state/screen` precedent
+for non-retained messages and plain strings like `state/apps/active`.
+
+The publish happens in `Tc002Periphery` through a new rotation hook. It runs before the script
+hook and the block check, the same way `state/buttons/*` ignores both. `cw` means "next app", so
+the rotate and swap settings apply to it as they do to navigation.
+
+Patch 0009 adds `IBoard::hasEncoder()`, which defaults to false. When it is true, discovery adds
+a Home Assistant `event` entity. That entity's `val_tpl` turns the plain payload into the
+`{"event_type": ...}` JSON that Home Assistant wants. Upstream boards announce the same document
+as before. `test_hadiscovery` (run with `uv run --with platformio pio test -e native -f
+test_hadiscovery` in `build-upstream/`) and the integration suite cover the topic, the missing
+retain flag, blocked navigation and the entity.
+
+Also: `build-upstream/` held a stray local commit that only added `.tc002-stamp`. `export` would
+have turned it into a patch, so the tree was re-applied with `--force` before this work.
+
+Not yet on a clock: which physical direction is `cw` (docs/VALIDATION.md step 8), and whether
+Home Assistant shows the entity.
+
+## 2026-09-25: knob events and coffee link on the clock (development install)
+
+Built from `b1bd3fb` plus the uncommitted issue #4 knob work and the port's Buy me a coffee link
+(still versioned 1.1.2-tc002.1, so the build was identified by the served UI's `coffee-link`). RAM
+trial (`tools/trial.py`, 120 s, port 18081): version and fixed 52 by 16 matrix reported, the
+branded UI served, `/sim/rotary/right` answered 404 under `--hardware` as intended, no crash in
+the host log, and the installed build came back afterwards. Only the UI's CSS changed after the
+trial (the button's `#ea9e64` background); the binary did not.
+
+Installed with the skill's wrapper: three vendor fingerprints verified, preflight passed,
+`update.img` 4428348 bytes, clock back with 42 FPS, apps (Time, temperature, Date, Battery) and
+settings intact, `updateImage` empty, MQTT connected, HA discovery on. Run directory:
+`~/.awtrix-ng-tc002/192.168.100.190/20260925-002217/`.
+
+Not yet checked: the broker needs credentials this session did not have, so neither the `knob`
+entry in the retained discovery document nor a `cw` / `ccw` on `ulanzi-tc002/state/knob` from the
+physical knob has been observed yet. Which physical direction publishes `cw` is still open.
+
+## 2026-09-25: EMQX outage after the knob install, A/B capture
+
+After the development install the owner's broker (EMQX Enterprise 6.3.1 at mqttserver.lan) went
+away once: the clock logged `connection lost (state -3)` at 00:30:26, `refused` on the retry (the
+broker was not listening), and a normal reconnect 68 s later. The owner saw it "freeze by itself"
+with the knob untouched and never with the previous build, then switched MQTT off on the clock.
+There is no broker log.
+
+A/B test without touching the owner's broker or the installed config: RAM trials
+(`tools/trial.py`, new `--config KEY=JSON` option) with MQTT pointed at a local
+`emqx/emqx-enterprise:6.3.1` in Docker, behind a capture proxy that decodes and checks every MQTT
+packet. 600 s each, knob idle:
+
+| | new build | old build `b1bd3fb` |
+|---|---|---|
+| connections / reconnects | 1 / 0 | 1 / 0 |
+| publishes | 144 | 144 (same per-topic counts) |
+| `state/knob` while idle | 0 | - |
+| discovery document | 7456 B (with `knob`) | 7267 B |
+| framing errors | 0 | 0 |
+| keepalive | PINGREQ every 15 s, all answered | same |
+| EMQX restarts / log lines | 0 / 0 | 0 / 0 |
+
+The firmware's traffic is the same apart from the extra ~190-byte discovery entry, and the same
+EMQX version handled both builds without trouble. No firmware change made.
+
+Setup lessons: this clock's adbd has no `adb reverse` and refuses a second concurrent `adb shell`
+("error: closed"); killing the local adb client mid-session left adbd refusing every shell until a
+power cycle. The clock reaches a broker on the WSL host over Wi-Fi only after a Windows inbound
+firewall rule for the port.
+
+Knob run (new build, 120 s, owner turning the knob): 49 `state/knob` publishes in about 30 s of
+turning, all non-retained, 26-27 bytes each; a fast spin peaked at about 20 per second, each
+followed by the matching `state/apps/active`. `cw` always moved to the next app and `ccw` to the
+previous one. No framing errors, one connection throughout, EMQX 6.3.1 quiet (0 restarts, 0 log
+lines). The first events of the owner's "clockwise first" sequence were `cw`.
+
+Direction confirmed by the owner on the clock (installed build, live against their EMQX and Home
+Assistant, 2026-09-25): turning the knob right publishes `cw`, left publishes `ccw`. MQTT and HA
+discovery were switched back on at 16:28:12 (they had been off since the owner turned them off at
+00:37 after the outage).
+
+The knob events and the coffee link ship as **1.1.2-tc002.2**: `v1.1.2-tc002.1` was already
+tagged and published on 2026-09-22, and the development install above still reported that
+number, which made the two builds indistinguishable on the clock.
