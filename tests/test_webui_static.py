@@ -25,3 +25,11 @@ def test_required_notice_and_licence_are_shown():
 
 def test_port_link_comes_after_the_support_button():
     assert UI.index('id="kofibtn"') < UI.index('id="github-link"')
+
+
+def test_port_coffee_link_follows_the_repository_link():
+    # The upstream author's Ko-fi button stays first; the port's own links come after it.
+    assert UI.count('id="coffee-link"') == 1
+    assert UI.index('id="github-link"') < UI.index('id="coffee-link"')
+    assert 'href="https://bunq.me/sanderdw"' in UI
+    assert '<symbol id="i-coffee"' in UI

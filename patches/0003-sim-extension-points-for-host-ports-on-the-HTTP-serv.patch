@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
 Date: Wed, 16 Sep 2026 16:19:35 +0200
-Subject: [PATCH 3/8] sim: extension points for host ports on the HTTP server
+Subject: [PATCH 3/9] sim: extension points for host ports on the HTTP server
 
 SimHttpExtension lets a host port answer or gate requests ahead of routing,
 register its own routes before the catch-alls and adjust the invented device

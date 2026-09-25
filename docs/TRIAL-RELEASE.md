@@ -8,6 +8,19 @@ installed on your clock. No compilation is needed.
 replace physical testing on every TC002 revision. Hardware validation so far
 covers stock app 1.1.1 and MCU V1.0.17.
 
+@CHANGES@
+
+## Install this version
+
+The one-line installer takes the newest stable release unless told otherwise. To install
+exactly this release on your clock:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- --version @TAG@ CLOCK_IP
+```
+
+What it checks and how to go back to stock: [installation guide](https://github.com/sanderdw/awtrix-ng-tc002/blob/main/docs/INSTALL.md).
+
 ## Download
 
 - [Trial ZIP](https://github.com/sanderdw/awtrix-ng-tc002/releases/download/@TAG@/awtrix-ng-tc002-trial.zip)

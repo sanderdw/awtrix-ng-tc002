@@ -109,7 +109,8 @@ jobs:
             exit 0
           fi
           notes="$RUNNER_TEMP/trial-release.md"
-          sed "s/@TAG@/$tag/g" docs/TRIAL-RELEASE.md > "$notes"
+          # docs/releases/<tag>.md, when present, replaces the @CHANGES@ line; otherwise it is dropped.
+          sed -e "/@CHANGES@/{r docs/releases/$tag.md" -e 'd' -e '}' -e "s/@TAG@/$tag/g" docs/TRIAL-RELEASE.md > "$notes"
           printf '\n## Build\n\nSource: [%s](https://github.com/%s/commit/%s)\n\n[Build and checks](https://github.com/%s/actions/runs/%s)\n' \
             "$GITHUB_SHA" "$GH_REPO" "$GITHUB_SHA" "$GH_REPO" "$GITHUB_RUN_ID" >> "$notes"
           gh release create "$tag" \

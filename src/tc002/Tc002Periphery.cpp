@@ -101,6 +101,7 @@ void Tc002Periphery::tick(int64_t nowMs) {
   const int rotation = board_->takeRotation();
   for (int i = 0; i < std::abs(rotation); ++i) {
     const bool next = (rotation > 0) != swapped;
+    if (rotationHook_) rotationHook_(next);
     // A detent has no held state: report it as a press and its release in one go. Only the press
     // can be consumed.
     const bool handled = buttonHook_ && buttonHook_(next ? 2 : 0, true);

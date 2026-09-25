@@ -405,6 +405,8 @@ int main(int argc, char** argv) {
   g_periphery.setButtonHook([](int btn, bool pressed) {
     return g_scripts && g_scripts->handleButtonState(g_engine->currentAppId(), btn, pressed);
   });
+  // Detents are events, so they are not retained; see patch 0009 for the matching HA entity.
+  g_periphery.setRotationHook([](bool next) { g_mqtt.publish("state/knob", next ? "cw" : "ccw", false); });
 
   g_scriptSvc.http = &g_scriptHttp;
   g_scriptSvc.mqtt = &g_scriptMqtt;

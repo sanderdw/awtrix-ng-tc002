@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
 Date: Wed, 16 Sep 2026 16:19:35 +0200
-Subject: [PATCH 6/8] media: script JPG icons up to the panel size
+Subject: [PATCH 6/9] media: script JPG icons up to the panel size
 
 GIF icons already follow the panel; a JPG was decoded into a fixed 8x8 tile. Decode it
 into a panel-sized buffer, take the size icon::draw reports, and pack the rows to the

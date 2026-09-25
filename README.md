@@ -20,6 +20,13 @@ MCU V1.0.17), builds the firmware image and a recovery image on your computer, r
 preflight on the clock, and flashes only after you type `flash`. It never downloads a
 firmware image, because the image contains Ulanzi's own application. About three minutes.
 
+This installs the newest **stable** release. To install a specific release instead, including a
+pre-release such as the knob-over-MQTT build, name its tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- --version v1.1.2-tc002.2 CLOCK_IP
+```
+
 - Back to stock: add `--restore` to the same line.
 - Stuck clock: hold the knob while powering on to start the stock app.
 - Just looking: add `--build-only`, or use the [RAM trial](#try-from-ram-first), which flashes nothing.
@@ -50,6 +57,10 @@ is his. AWTRIX NG is licensed under the
 [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0);
 this port carries its Required Notice and the same licence.
 
+<a href="https://bunq.me/sanderdw"><img src="docs/assets/coffee-outline.svg" width="20" height="20" alt=""></a>
+Want to thank me for the TC002 port itself? [Buy me a coffee](https://bunq.me/sanderdw).
+It appears in the web UI too, after Blueforcer's Ko-fi button.
+
 ![TC002](docs/tc002.jpg)
 
 ## MQTT compatibility
@@ -58,6 +69,28 @@ The MQTT interface uses the exact upstream topic paths and payload handling:
 [AWTRIX NG MQTT reference](https://blueforcer.github.io/awtrix-ng/reference/mqtt/).
 No TC002 topic prefix or translation service is added. The default prefix is the
 clock's 12-character MAC; it can be changed in System → MQTT.
+
+The knob adds one topic, because upstream boards have no rotary encoder. Each detent
+publishes `cw` or `ccw` to `<prefix>/state/knob`. These messages are not retained. This
+happens even while navigation is blocked or a script takes the turn. `cw` is the direction
+that moves to the next app. With Home Assistant discovery enabled, the clock also gets a
+**Knob** event entity, so turning the knob can drive something else:
+
+```yaml
+mode: queued
+triggers:
+  - trigger: state
+    entity_id: event.awtrix_ng_knob   # the entity id follows your clock's name
+    not_from: [unavailable, unknown]
+    not_to: [unavailable, unknown]
+actions:
+  - action: "media_player.volume_{{ 'up' if trigger.to_state.attributes.event_type == 'cw' else 'down' }}"
+    target:
+      entity_id: media_player.soundbar
+```
+
+Turn on block buttons (`blockNavigation`) if the knob should stop switching apps. This topic
+and entity are added by `patches/0009-*`; every upstream topic is unchanged.
 
 ## Supported hardware and firmware
 
@@ -99,11 +132,15 @@ storage and are limited to one at a time.
 
 ## Current status
 
-The current candidate is **1.1.2-tc002.1** (upstream 1.1.2). It carries the port onto upstream's
-Modbus TCP, script timers, extended button events, multi-icon pages and panel-sized GIFs, and has
-not yet been installed on a clock; the host test suite and golden screens pass. Upstream's new
-in-browser firmware download is not offered: it serves ESP32 images, and the clock keeps updating
-from an `.img` file. Its predecessor, 1.1.1-tc002.5 (upstream 1.1.1), restructured the source tree,
+The current candidate is **1.1.2-tc002.2** (upstream 1.1.2). It publishes knob turns over MQTT
+as `cw` / `ccw` on `<prefix>/state/knob`, with a matching Home Assistant event entity
+([issue #4](https://github.com/sanderdw/awtrix-ng-tc002/issues/4)), and adds a Buy me a coffee
+link for the port. These changes ran on the test clock on 2026-09-25 against EMQX and Home
+Assistant; [docs/VALIDATION.md](docs/VALIDATION.md) has not been run on this build.
+1.1.2-tc002.1 carried the port onto upstream's Modbus TCP, script timers, extended button events,
+multi-icon pages and panel-sized GIFs, and was installed on the test clock on 2026-09-20. Upstream's
+new in-browser firmware download is not offered: it serves ESP32 images, and the clock keeps
+updating from an `.img` file. 1.1.1-tc002.5 (upstream 1.1.1) restructured the source tree,
 hardened the HTTP server and added the launcher fallback, the vendor fingerprint gate and the
 one-line installer. An earlier candidate,
 1.1.0-tc002.7, was installed and verified after a Linux reboot on the test clock on
@@ -193,7 +230,8 @@ locally.
 
 ## Physical controls (1.1.0-tc002.4)
 
-- Turn the knob to move between apps.
+- Turn the knob to move between apps. Each detent is also published over MQTT, even
+  with block buttons on (see [MQTT compatibility](#mqtt-compatibility)).
 - Tap **−/+** to lower/raise speaker volume by 5 percentage points on release.
   Tone, MP3 and radio volume each change by the same amount, within 0–100%.
   Since 1.1.0-tc002.6, a speaker icon and percentage appear for 1.5 seconds after

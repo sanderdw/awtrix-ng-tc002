@@ -156,6 +156,7 @@ def device(tmp_path_factory):
                 "--webui", str(webui()), "--port", str(http_port)],
                 stdout=fw_log, stderr=subprocess.STDOUT)
         d = Device(client, messages, http_port)
+        d.hardware = bool(serial)
         if serial:
             d.base_url = "http://"+serial.split(":")[0]+":18081"
         wait_for(lambda: d.api("/api/v1/device")["mqtt"]["state"] == "connected")
@@ -293,7 +294,27 @@ def test_retained_state_and_discovery(device):
                    "state/capabilities", "state/prefix", "state/buttons/left", "state/buttons/select", "state/buttons/right"):
         assert f"tc002test/{suffix}" in seen
     assert seen["tc002test/state/prefix"] == b"tc002test"
-    assert any(k.startswith("homeassistant/device/") and k.endswith("/config") for k in seen)
+    assert "tc002test/state/knob" not in seen
+    discovery = next(v for k, v in seen.items() if k.startswith("homeassistant/device/") and k.endswith("/config"))
+    knob = json.loads(discovery)["cmps"]["knob"]
+    assert (knob["p"], knob["stat_t"], knob["evt_typ"]) == ("event", "~/state/knob", ["cw", "ccw"])
+
+
+def test_knob_turns_publish_events_even_when_navigation_is_blocked(device):
+    if device.hardware:
+        pytest.skip("/sim/rotary is not served with --hardware; turn the knob by hand (docs/VALIDATION.md)")
+    device.cmd("apps/switch", {"name": "Time", "fast": True})
+    for blocked in (False, True):
+        device.cmd("settings", {"blockNavigation": blocked})
+        before = device.api("/api/v1/device")["currentApp"]
+        device.drain()
+        for side, payload in (("right", b"cw"), ("left", b"ccw")):
+            device.api(f"/sim/rotary/{side}", {}, "POST")
+            message = device.receive("tc002test/state/knob")
+            assert message is not None and message.payload == payload and not message.retain
+        if blocked:
+            assert device.api("/api/v1/device")["currentApp"] == before
+    device.cmd("settings", {"blockNavigation": False})
 
 @pytest.mark.parametrize('change', [{'panelWidth':32},{'panels':2},{'pinMatrix':21}])
 def test_tc002_wiring_cannot_be_changed(device,change):
