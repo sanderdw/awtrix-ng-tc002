@@ -30,7 +30,9 @@ stock version with `uv run tools/vendor_fingerprints.py capture CLOCK_IP` and co
 7. Unplug USB and, if the battery is fitted, hold the power control until the clock is fully
    off. Wait 60 seconds. Power on.
 8. Within three minutes: the web UI answers, MQTT reports online, NTP has set the time, the
-   buttons and knob work, a tone plays.
+   buttons and knob work, a tone plays. With `mosquitto_sub -t '<prefix>/state/knob' -v`
+   running, one clockwise detent prints one `cw` and one anticlockwise detent prints one `ccw`,
+   with block buttons both off and on.
 9. Repeat step 7 once more.
 
 ## Recovery without a computer

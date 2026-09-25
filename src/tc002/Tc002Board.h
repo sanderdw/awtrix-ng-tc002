@@ -38,6 +38,8 @@ class Tc002Board : public SimBoard {
   }
   bool hasBattery() const override { return tc002::hardwareEnabled(); }
   bool hasLightSensor() const override { return false; }
+  // True on host builds as well: /sim/rotary/* feeds the same detents as the real knob.
+  bool hasEncoder() const override { return true; }
   int readBatteryMillivolts() override { return hardware_.batteryMillivolts(); }
   void pollButtons(ButtonState& out) override {
     SimBoard::pollButtons(out);

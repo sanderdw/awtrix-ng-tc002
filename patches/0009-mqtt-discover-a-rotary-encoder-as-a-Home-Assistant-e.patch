@@ -1,0 +1,264 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
+Date: Thu, 24 Sep 2026 23:50:34 +0200
+Subject: [PATCH 9/9] mqtt: discover a rotary encoder as a Home Assistant event
+ entity
+
+A knob's detents are events, not held state, so they cannot ride the retained
+state/buttons/* levels. Boards that report hasEncoder() publish each detent as
+a non-retained "cw" / "ccw" on <P>/state/knob, and discovery adds a "Knob"
+event entity for it. The default is false, so other boards announce the same
+document as before.
+
+diff --git a/docs/reference/mqtt.md b/docs/reference/mqtt.md
+index 0c04a24..738fa17 100644
+--- a/docs/reference/mqtt.md
++++ b/docs/reference/mqtt.md
+@@ -371,6 +371,7 @@ to the broker do not loop.
+ | `<P>/state/prefix` | `<P>` itself, plain string (not JSON) | **yes** | once per connect |
+ | `<P>/state/buttons/left` \| `/select` \| `/right` | `"1"` / `"0"` | **yes** | on button edge, and on connect |
+ | `<P>/state/screen` | `{"width":W,"height":H,"pixels":[…]}` | no | only as the reply to `cmd/screen/get` |
++| `<P>/state/knob` | `cw` / `ccw`, plain string | no | once per detent, on boards with a rotary encoder |
+ 
+ `statsInterval` (default 10 000 ms, floored at 1 000) is the slowest that
+ `state/device` publishes, not the only trigger. It is also published
+@@ -402,6 +403,19 @@ button webhook (`buttonCallback`) calls the middle one `middle`.
+ mosquitto_sub -h broker.local -t 'awtrixNG/state/buttons/+' -v
+ ```
+ 
++### state/knob
++
++Only boards with a rotary encoder publish this. A detent is an event rather than
++a level, so every detent is its own message, `cw` or `ccw`. The message is **not
++retained**, which means a reconnect never replays an old turn. `cw` is the
++direction that moves to the next app, and the board's rotation and button-swap
++settings apply to it the same way. A turn is published even while navigation is
++blocked or a script takes the detent.
++
++```bash
++mosquitto_sub -h broker.local -t 'awtrixNG/state/knob' -v
++```
++
+ ### state/capabilities
+ 
+ The `transitions` list is the same 22 names the `transitionEffect` setting
+@@ -451,6 +465,7 @@ lost in transit is lost silently.
+ | `<P>/state/prefix` | **yes** |
+ | `<P>/state/buttons/*` | **yes** |
+ | `<P>/state/screen` | no |
++| `<P>/state/knob` | no |
+ | `<cmd topic>/result` | no |
+ | every HA discovery config, entity state and availability publish | **yes** |
+ 
+@@ -560,7 +575,7 @@ column is the topic the entity is bound to, all of them documented above.
+ | Button select | `binary_sensor` | `btnm` | `state/buttons/select` |
+ | Button right | `binary_sensor` | `btnr` | `state/buttons/right` |
+ 
+-The seven conditional entities are announced only when the hardware is there, so
++The eight conditional entities are announced only when the hardware is there, so
+ none of them sits at `unknown` waiting for a value that never arrives - the same
+ rule `<P>/state/device` follows when it omits those fields.
+ 
+@@ -573,6 +588,7 @@ rule `<P>/state/device` follows when it omits those fields.
+ | Battery | `sensor` | `bat` | `state/device` → `batteryPercent`; `%` | a battery pin is set (`pinBattery`) |
+ | Battery voltage | `sensor` | `batv` | `state/device` → `batteryVoltage`; `V` | a battery pin is set (`pinBattery`) |
+ | Low battery | `binary_sensor` | `lowbat` | `state/device` → `lowBattery` | a battery pin is set (`pinBattery`) |
++| Knob | `event` | `knob` | `state/knob`; event types `cw`, `ccw` | the board has a rotary encoder |
+ 
+ A **fully equipped board** - battery pin, light sensor and a
+ temperature/humidity sensor - registers **26** entities. A board with none of
+diff --git a/src/core/mqtt/HaDiscovery.cpp b/src/core/mqtt/HaDiscovery.cpp
+index b074f84..876ba65 100644
+--- a/src/core/mqtt/HaDiscovery.cpp
++++ b/src/core/mqtt/HaDiscovery.cpp
+@@ -61,6 +61,7 @@ enum Gate : unsigned char {
+   Humidity = 1 << 2,
+   Pressure = 1 << 3,
+   LightSensor = 1 << 4,
++  Encoder = 1 << 5,
+ };
+ 
+ enum Dynamic : unsigned char { NoExtra = 0, TransitionOptions = 1 };
+@@ -162,6 +163,11 @@ constexpr Component kComponents[] = {
+     {"btnr",
+      R"J("p":"binary_sensor","name":"Button right","ic":"mdi:gesture-tap-button","stat_t":"~/state/buttons/right","pl_on":"1","pl_off":"0")J",
+      Always, NoExtra},
++    // A detent has no state to hold, so the knob is an event entity. The topic carries a plain
++    // "cw" / "ccw"; the template wraps it in the JSON an event entity expects.
++    {"knob",
++     R"J("p":"event","name":"Knob","ic":"mdi:knob","stat_t":"~/state/knob","evt_typ":["cw","ccw"],"val_tpl":"{\"event_type\":\"{{ value }}\"}")J",
++     Encoder, NoExtra},
+ };
+ 
+ bool gated(unsigned char gate, const DiscoveryContext& ctx) {
+@@ -170,6 +176,7 @@ bool gated(unsigned char gate, const DiscoveryContext& ctx) {
+   if ((gate & Humidity) && !ctx.hasHumidity) return false;
+   if ((gate & Pressure) && !ctx.hasPressure) return false;
+   if ((gate & LightSensor) && !ctx.hasLightSensor) return false;
++  if ((gate & Encoder) && !ctx.hasEncoder) return false;
+   return true;
+ }
+ 
+diff --git a/src/core/mqtt/HaDiscovery.h b/src/core/mqtt/HaDiscovery.h
+index 48387dd..e20fcb1 100644
+--- a/src/core/mqtt/HaDiscovery.h
++++ b/src/core/mqtt/HaDiscovery.h
+@@ -18,6 +18,7 @@ struct DiscoveryContext {
+   bool hasTemperature = false;
+   bool hasHumidity = false;
+   bool hasPressure = false;
++  bool hasEncoder = false;
+ };
+ 
+ std::string discoveryTopic(const DiscoveryContext& ctx);
+diff --git a/src/hal/IBoard.h b/src/hal/IBoard.h
+index 69857dd..ff8bddf 100644
+--- a/src/hal/IBoard.h
++++ b/src/hal/IBoard.h
+@@ -32,6 +32,9 @@ class IBoard {
+ 
+   virtual bool hasBattery() const = 0;
+   virtual bool hasLightSensor() const = 0;
++  // A rotary encoder next to the buttons. Its detents are events, not held state, so they never
++  // appear in ButtonState; boards that have one publish them on their own.
++  virtual bool hasEncoder() const { return false; }
+   // Millivolts measured at the divider pin, -1 when no battery is wired.
+   virtual int readBatteryMillivolts() = 0;
+   // Raw ADC counts, not lux; the light curve is applied further up in AutoBrightness.
+diff --git a/src/transport/mqtt/HaAnnouncer.cpp b/src/transport/mqtt/HaAnnouncer.cpp
+index 3313448..323e34c 100644
+--- a/src/transport/mqtt/HaAnnouncer.cpp
++++ b/src/transport/mqtt/HaAnnouncer.cpp
+@@ -33,6 +33,7 @@ void HaAnnouncer::configure(const DeviceConfig& cfg, IBoard& board, const std::s
+   ctx_.version = AWTRIX_NG_VERSION;
+   ctx_.hasBattery = board.hasBattery();
+   ctx_.hasLightSensor = board.hasLightSensor();
++  ctx_.hasEncoder = board.hasEncoder();
+   ctx_.hasTemperature = sensors.hasSensor();
+   ctx_.hasHumidity = sensors.hasHumidity();
+   ctx_.hasPressure = sensors.hasPressure();
+diff --git a/test/test_hadiscovery/test_hadiscovery.cpp b/test/test_hadiscovery/test_hadiscovery.cpp
+index e4ccc0b..74d5cf2 100644
+--- a/test/test_hadiscovery/test_hadiscovery.cpp
++++ b/test/test_hadiscovery/test_hadiscovery.cpp
+@@ -111,13 +111,14 @@ void test_discovery_topic_is_device_scoped() {
+ }
+ 
+ void test_counting_pass_length_matches_the_streaming_pass() {
+-  for (unsigned mask = 0; mask < 32; ++mask) {
++  for (unsigned mask = 0; mask < 64; ++mask) {
+     DiscoveryContext ctx = baseContext();
+     ctx.hasBattery = (mask & 1) != 0;
+     ctx.hasTemperature = (mask & 2) != 0;
+     ctx.hasHumidity = (mask & 4) != 0;
+     ctx.hasPressure = (mask & 8) != 0;
+     ctx.hasLightSensor = (mask & 16) != 0;
++    ctx.hasEncoder = (mask & 32) != 0;
+ 
+     CountingSink counting;
+     emit(ctx, counting);
+@@ -165,6 +166,7 @@ void test_emits_the_full_entity_set_with_correct_platforms() {
+   ctx.hasHumidity = true;
+   ctx.hasPressure = true;
+   ctx.hasLightSensor = true;
++  ctx.hasEncoder = true;
+   const std::string json = emitToString(ctx);
+ 
+   const JsonReader doc = parsed(json);
+@@ -178,13 +180,14 @@ void test_emits_the_full_entity_set_with_correct_platforms() {
+   }
+   const Expected kGated[] = {{"temp", "sensor"},  {"hum", "sensor"}, {"press", "sensor"},
+                              {"bat", "sensor"},   {"batv", "sensor"},
+-                             {"lowbat", "binary_sensor"}, {"light", "sensor"}};
++                             {"lowbat", "binary_sensor"}, {"light", "sensor"},
++                             {"knob", "event"}};
+   for (const Expected& e : kGated) {
+     const JsonReader c = at(cmps, e.key);
+     TEST_ASSERT_TRUE_MESSAGE(c.isObject(), e.key);
+     TEST_ASSERT_EQUAL_STRING_MESSAGE(e.platform, str(c, "p").c_str(), e.key);
+   }
+-  TEST_ASSERT_EQUAL_size_t(27, memberCount(cmps));
++  TEST_ASSERT_EQUAL_size_t(28, memberCount(cmps));
+ }
+ 
+ void test_absent_hardware_omits_its_entities() {
+@@ -200,6 +203,7 @@ void test_absent_hardware_omits_its_entities() {
+   TEST_ASSERT_TRUE(absent(cmps, "batv"));
+   TEST_ASSERT_TRUE(absent(cmps, "lowbat"));
+   TEST_ASSERT_TRUE(absent(cmps, "light"));
++  TEST_ASSERT_TRUE(absent(cmps, "knob"));
+   TEST_ASSERT_EQUAL_size_t(20, memberCount(cmps));
+ }
+ 
+@@ -258,14 +262,16 @@ void test_state_topics_are_ones_the_firmware_already_publishes() {
+   ctx.hasHumidity = true;
+   ctx.hasPressure = true;
+   ctx.hasLightSensor = true;
++  ctx.hasEncoder = true;
+   const std::string json = emitToString(ctx);
+ 
+   const JsonReader doc = parsed(json);
+ 
++  // state/knob is published by the board, not the core, and only where hasEncoder() is true.
+   static const char* kKnown[] = {
+       "~/state/device",        "~/state/settings",       "~/state/apps/active",
+       "~/state/buttons/left",  "~/state/buttons/select", "~/state/buttons/right",
+-      "~/state/prefix",
++      "~/state/prefix",        "~/state/knob",
+   };
+   static const char* kStateKeys[] = {"stat_t", "bri_stat_t", "rgb_stat_t"};
+   forEachMember(at(doc, "cmps"), [&](const std::string&, JsonReader comp) {
+@@ -295,6 +301,28 @@ void test_indicator_off_payload_is_a_command_the_firmware_accepts() {
+   }
+ }
+ 
++void test_knob_event_wraps_the_plain_payload() {
++  DiscoveryContext ctx = baseContext();
++  ctx.hasEncoder = true;
++  const std::string json = emitToString(ctx);
++
++  const JsonReader knob = at(at(parsed(json), "cmps"), "knob");
++  TEST_ASSERT_EQUAL_STRING("event", str(knob, "p").c_str());
++  TEST_ASSERT_EQUAL_STRING("~/state/knob", str(knob, "stat_t").c_str());
++  TEST_ASSERT_EQUAL_STRING("{\"event_type\":\"{{ value }}\"}", str(knob, "val_tpl").c_str());
++  JsonReader types = at(knob, "evt_typ");
++  TEST_ASSERT_TRUE(types.enterArray());
++  std::vector<std::string> names;
++  while (types.nextElement()) {
++    names.emplace_back();
++    types.appendString(names.back());
++    TEST_ASSERT_TRUE(types.skipValue());
++  }
++  TEST_ASSERT_EQUAL_size_t(2, names.size());
++  TEST_ASSERT_EQUAL_STRING("cw", names[0].c_str());
++  TEST_ASSERT_EQUAL_STRING("ccw", names[1].c_str());
++}
++
+ void test_every_component_carries_the_topic_base() {
+   DiscoveryContext ctx = baseContext();
+   ctx.hasBattery = true;
+@@ -318,6 +346,7 @@ void test_unique_ids_are_distinct() {
+   ctx.hasHumidity = true;
+   ctx.hasPressure = true;
+   ctx.hasLightSensor = true;
++  ctx.hasEncoder = true;
+   const std::string json = emitToString(ctx);
+ 
+   const JsonReader doc = parsed(json);
+@@ -327,7 +356,7 @@ void test_unique_ids_are_distinct() {
+     ids.push_back(str(comp, "uniq_id"));
+   });
+ 
+-  TEST_ASSERT_EQUAL_size_t(27, ids.size());
++  TEST_ASSERT_EQUAL_size_t(28, ids.size());
+   std::sort(ids.begin(), ids.end());
+   TEST_ASSERT_TRUE(std::adjacent_find(ids.begin(), ids.end()) == ids.end());
+ }
+@@ -351,6 +380,7 @@ int main(int, char**) {
+   RUN_TEST(test_every_command_topic_is_routable);
+   RUN_TEST(test_state_topics_are_ones_the_firmware_already_publishes);
+   RUN_TEST(test_indicator_off_payload_is_a_command_the_firmware_accepts);
++  RUN_TEST(test_knob_event_wraps_the_plain_payload);
+   RUN_TEST(test_every_component_carries_the_topic_base);
+   RUN_TEST(test_unique_ids_are_distinct);
+   UNITY_END();

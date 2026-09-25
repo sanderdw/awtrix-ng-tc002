@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
 Date: Wed, 16 Sep 2026 16:19:35 +0200
-Subject: [PATCH 1/8] render: make the panel height and width build-time
+Subject: [PATCH 1/9] render: make the panel height and width build-time
  settings
 
 A port for a taller panel (the 52 by 16 Ulanzi TC002) sets AWTRIX_MATRIX_HEIGHT and

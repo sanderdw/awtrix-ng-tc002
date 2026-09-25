@@ -59,6 +59,28 @@ The MQTT interface uses the exact upstream topic paths and payload handling:
 No TC002 topic prefix or translation service is added. The default prefix is the
 clock's 12-character MAC; it can be changed in System → MQTT.
 
+The knob adds one topic, because upstream boards have no rotary encoder. Each detent
+publishes `cw` or `ccw` to `<prefix>/state/knob`. These messages are not retained. This
+happens even while navigation is blocked or a script takes the turn. `cw` is the direction
+that moves to the next app. With Home Assistant discovery enabled, the clock also gets a
+**Knob** event entity, so turning the knob can drive something else:
+
+```yaml
+mode: queued
+triggers:
+  - trigger: state
+    entity_id: event.awtrix_ng_knob   # the entity id follows your clock's name
+    not_from: [unavailable, unknown]
+    not_to: [unavailable, unknown]
+actions:
+  - action: "media_player.volume_{{ 'up' if trigger.to_state.attributes.event_type == 'cw' else 'down' }}"
+    target:
+      entity_id: media_player.soundbar
+```
+
+Turn on block buttons (`blockNavigation`) if the knob should stop switching apps. This topic
+and entity are added by `patches/0009-*`; every upstream topic is unchanged.
+
 ## Supported hardware and firmware
 
 | | Supported | Enforced by |
@@ -193,7 +215,8 @@ locally.
 
 ## Physical controls (1.1.0-tc002.4)
 
-- Turn the knob to move between apps.
+- Turn the knob to move between apps. Each detent is also published over MQTT, even
+  with block buttons on (see [MQTT compatibility](#mqtt-compatibility)).
 - Tap **−/+** to lower/raise speaker volume by 5 percentage points on release.
   Tone, MP3 and radio volume each change by the same amount, within 0–100%.
   Since 1.1.0-tc002.6, a speaker icon and percentage appear for 1.5 seconds after
