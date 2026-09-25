@@ -1,5 +1,7 @@
 """Run AWTRIX from RAM and restart the installed launcher on exit. Never flashes.
 Usage: uv run tools/trial.py CLOCK_IP --seconds 120 --tone  (adb from $ADB, PATH or build-deps/platform-tools)
+MQTT against a broker on this computer, without touching the installed configuration:
+  --config mqttEnabled=true --config mqttHost='"THIS_COMPUTER_IP"' --config mqttPort=18883
 """
 import argparse
 import json
@@ -17,7 +19,15 @@ p.add_argument('host')
 p.add_argument('--seconds',type=int,default=120)
 p.add_argument('--binary',type=Path,default=Path('build-tc002/awtrix-tc002'))
 p.add_argument('--tone',action='store_true')
+p.add_argument('--config',action='append',default=[],metavar='KEY=JSON',
+               help='override a field of the throw-away device.json, e.g. haDiscovery=true')
 a=p.parse_args()
+overrides={}
+for item in a.config:
+    key,sep,value=item.partition('=')
+    try: overrides[key]=json.loads(value)
+    except ValueError: sep=''
+    if not key or not sep: p.error(f'--config expects KEY=JSON, got {item!r}')
 if not 20<=a.seconds<=600: p.error('seconds must be between 20 and 600')
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from paths import adb as find_adb
@@ -31,7 +41,7 @@ if 'running' not in device('shell','getprop init.svc.zkswe'):
 device('shell','mkdir -p /tmp/awtrix-trial-data')
 with tempfile.TemporaryDirectory() as tmp:
     config=Path(tmp)/'device.json'
-    config.write_text(json.dumps({'mqttEnabled':False,'ntpServer':'','wifiSsid':'','panelWidth':52,'panels':1}))
+    config.write_text(json.dumps({'mqttEnabled':False,'ntpServer':'','wifiSsid':'','panelWidth':52,'panels':1,**overrides}))
     for source,target in [(a.binary,'/tmp/awtrix-trial-bin'),(config,'/tmp/awtrix-trial-data/device.json'),
         (next(w for w in (Path('build-webui/index.html'),Path('upstream/awtrix-ng/webui/index.html')) if w.exists()),'/tmp/awtrix-trial.html'),
         (Path('assets/cacert.pem'),'/tmp/awtrix-cacert.pem')]:
