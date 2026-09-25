@@ -64,7 +64,14 @@ git push origin main v1.1.0-tc002.7
 Use the new version in both commands for each subsequent release. The workflow
 checks that the tag matches the firmware version, runs the tests, and publishes
 the public RAM-trial ZIP and checksum under that tag. Pushes to `main` run checks
-without publishing. Never move a published tag or replace its downloads; make a
+without publishing.
+
+A pull request from a branch of this repository runs the same checks and publishes a test
+pre-release tagged `v<version>-pr<number>`, for example `v1.1.2-tc002.3-pr10`. It can be
+installed with `install.sh --version v1.1.2-tc002.3-pr10 CLOCK_IP`. Every push to the pull
+request replaces it, and closing the pull request deletes it. The clock reports the plain
+version from `CMakeLists.txt`, so give testers the commit from the release notes. Pull requests
+from forks are built and tested only. Never move a published tag or replace its downloads; make a
 new version instead. The old `experimental-trial` release remains as an archive.
 
 Contributions to the application and port use the existing PolyForm Noncommercial
