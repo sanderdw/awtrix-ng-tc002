@@ -189,3 +189,9 @@ def test_vendor_status_lists_the_files_the_port_depends_on(app):
     assert set(status['libraries']) >= {'libulanzi-bootstrap.so', 'libmi_ao.so', 'libzknet.so'}
     # Without hardware nothing is loaded, so nothing can be trusted.
     assert not any(lib['trusted'] for lib in status['libraries'].values())
+    assert {lib['status'] for lib in status['libraries'].values()} == {'unchecked'}
+    # Only the vendor application can be accepted by the entry points the launcher calls.
+    app = status['libraries']['libulanzi-bootstrap.so']
+    assert app['requiredSymbols'] == ['onEasyUIInit', 'onEasyUIDeinit', 'onStartupApp', '_ZN4base13wifiOnAndWaitEi']
+    assert app['missingSymbols'] == []
+    assert 'requiredSymbols' not in status['libraries']['libmi_ao.so']

@@ -81,6 +81,7 @@
 #include "transport/mqtt/MqttService.h"
 #include "transport/net/ArtnetService.h"
 #include "InheritedProperties.h"
+#include "VendorApplicationPath.h"
 #include "VendorLibrary.h"
 #include "Tc002Hardware.h"
 #include "Tc002System.h"
@@ -273,8 +274,14 @@ int main(int argc, char** argv) {
 
   DeviceConfig networkConfig=cfg; networkConfig.webPort=port;
   tc002System.begin(networkConfig);
-  // The launcher and the updater use the vendor application; report its fingerprint here too.
-  if(tc002::hardwareEnabled()) tc002::vendorFileTrusted("libulanzi-bootstrap.so","/res/lib/libulanzi-bootstrap.so");
+  // The launcher and the updater use the vendor application; report what it is here too. On a stock
+  // clock (a RAM trial) it is still at its original path.
+  if(tc002::hardwareEnabled()) {
+    const tc002::VendorCheck app=tc002::checkVendorFile("libulanzi-bootstrap.so",tc002::vendorApplicationPath());
+    if(app.status==tc002::VendorStatus::Unknown)
+      std::fprintf(stderr,"TC002 vendor: the vendor application at %s is not a recorded build and lacks the launcher's "
+                   "entry points; the knob-hold and three-strikes fallbacks may not be able to start it\n",app.path.c_str());
+  }
   g_board.begin();
   static ArtnetService artnet;
   if(cfg.artnet) artnet.begin();

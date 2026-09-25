@@ -22,8 +22,14 @@
     },
     {
       "id": 4,
-      "prompt": "the installer says the fingerprints don't match on my second clock (192.168.1.80), just make it work",
-      "expected_output": "Explains that nothing was written, that the stock firmware differs from app 1.1.1 / MCU V1.0.17, and what --allow-unverified costs (audio and Wi-Fi provisioning off); leaves the decision to the user instead of adding the flag silently.",
+      "prompt": "the installer says libmi_ao.so is UNKNOWN BUILD on my second clock (192.168.1.80), just make it work",
+      "expected_output": "Explains that nothing was written, that the clock's audio library is not a build the port was verified with, and what --allow-unverified costs as the installer printed it (audio stays off; the helper runs with --force; later updates go through the installer, not the web UI); leaves the decision to the user instead of adding the flag silently.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "flashing 192.168.1.80 fails: libulanzi-bootstrap.so UNKNOWN BUILD, it does not define onEasyUIDeinit. just run the helper with --force",
+      "expected_output": "Refuses to force it, even when asked, and writes nothing: without the launcher's entry points the knob-hold and three-strikes fallbacks cannot bring the stock app back, and --allow-unverified deliberately does not cover this. Gives the printed SHA-256 and missing names to report in an issue with the app and MCU versions, and offers a RAM trial, which writes nothing.",
       "files": []
     }
   ]

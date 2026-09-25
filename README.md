@@ -15,9 +15,10 @@ curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/insta
 ```
 
 Replace `CLOCK_IP` with your clock's address. The installer downloads `adb` if needed, reads
-your clock's application partition, verifies it is the supported stock firmware (app 1.1.1,
-MCU V1.0.17), builds the firmware image and a recovery image on your computer, runs a
-preflight on the clock, and flashes only after you type `flash`. It never downloads a
+your clock's application partition, checks the Ulanzi files the port calls into (see
+[Supported hardware and firmware](#supported-hardware-and-firmware)), builds the firmware image
+and a recovery image on your computer, runs a preflight on the clock, and flashes only after you
+type `flash`. It never downloads a
 firmware image, because the image contains Ulanzi's own application. About three minutes.
 
 This installs the newest **stable** release. To install a specific release instead, including a
@@ -97,21 +98,33 @@ and entity are added by `patches/0009-*`; every upstream topic is unchanged.
 | | Supported | Enforced by |
 |---|---|---|
 | Clock | Ulanzi TC002 (SSD202D, 52 × 16 panel) | flash geometry check in the updater |
-| Stock app | **1.1.1** | SHA-256 of the vendor files in `src/tc002/vendor-fingerprints.json` |
-| MCU firmware | **V1.0.17** | version handshake at start-up (logged, not gated) |
+| Stock app | **1.1.1** validated; other versions accepted as below (1.0.1 and 1.0.8 reported working, 1.1.3 awaiting a report) | `src/tc002/vendor-fingerprints.json`: SHA-256 of the audio and network libraries; SHA-256 **or** the launcher's entry points for the Ulanzi application |
+| MCU firmware | **V1.0.17** validated (V1.0.16 reported working) | version handshake at start-up (logged, not gated) |
 
-The firmware only calls into the vendor audio and network libraries when the file it loaded
-matches a recorded hash, and the updater refuses to install on an unrecognised stock firmware
-unless told `--force`. `GET /api/v1/tc002/vendor` shows what was checked. The recorded hashes were captured from
-the test clock on 2026-09-16 with `uv run tools/vendor_fingerprints.py capture CLOCK_IP`; a
-clock with different files shows them as untrusted and keeps audio and vendor Wi-Fi
-provisioning off.
+The port calls into three Ulanzi files, and they are checked differently:
+
+- **Audio (`/lib/libmi_ao.so`) and network (`/lib/libzknet.so`) libraries**: the port passes
+  hand-measured structures to them, so they must match a recorded SHA-256. With another build
+  the feature that needs it stays off (audio; or DHCP after the first lease, static addressing
+  and the fallback access point).
+- **The Ulanzi application (`/res/lib/libzkgui.so`)**: it differs with every stock version,
+  and the launcher only calls four functions in it: the FlyThings app entry points
+  `onEasyUIInit`, `onEasyUIDeinit` and `onStartupApp`, and the SDK's `base::wifiOnAndWait(int)`.
+  A build without a recorded hash is accepted as **compatible** when its ELF dynamic symbol
+  table defines all four. The file is read, never loaded.
+
+The installer and the update helper refuse an install when either rule fails. `--allow-unverified`
+(which passes `--force` to the helper) accepts unknown audio or network libraries, never an
+application without the entry points. `GET /api/v1/tc002/vendor` shows what was checked,
+with a `status` of `verified`, `compatible` or `unknown` per file. The recorded hashes were
+captured from the test clock on 2026-09-16 with
+`uv run tools/vendor_fingerprints.py capture CLOCK_IP`.
 
 ## Risks
 
 - **Installing writes the `res` flash partition in place.** There is no A/B copy on the
-  clock. The helper validates the image, checks the partition geometry, refuses unknown stock
-  firmware, and verifies every erase block by read-back, but a power cut during the write
+  clock. The helper validates the image, checks the partition geometry, refuses stock
+  firmware it does not recognise, and verifies every erase block by read-back, but a power cut during the write
   leaves a partition that needs the recovery steps below.
 - **Cold boot is not validated for every release.** A release is a candidate until the
   protocol in [docs/VALIDATION.md](docs/VALIDATION.md) has been run on a real clock; the
@@ -120,8 +133,10 @@ provisioning off.
   a row, both of which start the vendor application instead of AWTRIX. Both were exercised
   on the test clock on 2026-09-16. Recovery over a serial console has never been tried.
 - **Vendor coupling.** Wi-Fi provisioning, audio and the launcher use Ulanzi's closed
-  libraries. A future Ulanzi update can change them; the fingerprint gate then turns those
-  features off instead of guessing.
+  libraries. A future Ulanzi update can change them; the fingerprint gate then turns audio or
+  networking features off instead of guessing, and refuses an application without the
+  launcher's entry points. The compatible check proves those four functions exist, not that
+  they behave as in 1.1.1; the knob-hold and three-strikes fallbacks are the safety net.
 
 ## Security
 
@@ -132,11 +147,16 @@ storage and are limited to one at a time.
 
 ## Current status
 
-The current candidate is **1.1.2-tc002.2** (upstream 1.1.2). It publishes knob turns over MQTT
+The current candidate is **1.1.2-tc002.3** (upstream 1.1.2). It installs on stock firmware
+other than 1.1.1 when the Ulanzi application defines the launcher's entry points
+([#8](https://github.com/sanderdw/awtrix-ng-tc002/issues/8),
+[#6](https://github.com/sanderdw/awtrix-ng-tc002/issues/6)), makes `--allow-unverified` and
+`--restore` pass `--force` to the update helper, and reports each vendor file's status. It has
+not run on a clock yet. 1.1.2-tc002.2 publishes knob turns over MQTT
 as `cw` / `ccw` on `<prefix>/state/knob`, with a matching Home Assistant event entity
 ([issue #4](https://github.com/sanderdw/awtrix-ng-tc002/issues/4)), and adds a Buy me a coffee
 link for the port. These changes ran on the test clock on 2026-09-25 against EMQX and Home
-Assistant; [docs/VALIDATION.md](docs/VALIDATION.md) has not been run on this build.
+Assistant; [docs/VALIDATION.md](docs/VALIDATION.md) has not been run on either build.
 1.1.2-tc002.1 carried the port onto upstream's Modbus TCP, script timers, extended button events,
 multi-icon pages and panel-sized GIFs, and was installed on the test clock on 2026-09-20. Upstream's
 new in-browser firmware download is not offered: it serves ESP32 images, and the clock keeps
@@ -390,8 +410,12 @@ chmod 700 /tmp/awtrix-update-helper
 ```
 
 **`--install` writes flash and reboots.** It first checks the vendor files on the clock
-against the recorded fingerprints and refuses an unrecognised stock firmware unless `--force`
-is added. Use `restore-stock.img` with the same helper to restore stock. If a write fails
+(see [Supported hardware and firmware](#supported-hardware-and-firmware)) and refuses an
+unrecognised stock firmware unless `--force` is added after the image path. The installer's
+`--allow-unverified` and `--restore` add it for you. Never force an install by hand over an
+application that lacks the launcher's entry points: the knob-hold and three-strikes fallbacks
+need them. Use `restore-stock.img` with the same helper to restore stock; that needs `--force` on
+a clock the helper does not recognise. The web UI's update runs the helper without `--force`. If a write fails
 and ADB remains available, keep power on and inspect the error before retrying. Do not
 interrupt power during a write.
 

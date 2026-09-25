@@ -653,3 +653,72 @@ discovery were switched back on at 16:28:12 (they had been off since the owner t
 The knob events and the coffee link ship as **1.1.2-tc002.2**: `v1.1.2-tc002.1` was already
 tagged and published on 2026-09-22, and the development install above still reported that
 number, which made the two builds indistinguishable on the clock.
+
+## 2026-09-25: vendor application accepted by its entry points (issues #8, #6; 1.1.2-tc002.3)
+
+Three clocks on other stock versions could not install:
+
+- #8: app 1.1.3 / MCU V1.0.17. The installer refused `/res/lib/libzkgui.so`, and
+  `--allow-unverified` could not finish because `install.py` never passed `--force` to the
+  helper.
+- #6: SoC 1.0.1 / MCU V1.0.16 (`libzkgui.so` `4b8783e1…`) and SoC 1.0.8 / MCU V1.0.17
+  (`de15dd84…`). On both, `libmi_ao.so` and `libzknet.so` match the recorded hashes. Both
+  reporters installed by running the helper with `--force` by hand: AWTRIX boots, Wi-Fi
+  connects, 42 FPS, audio library trusted. `nm -D` shows all four launcher symbols in both
+  builds.
+
+Ulanzi's own repository (UlanziTechnology/Ulanzi-U-Clock-TC002) shows what those four symbols
+are:
+
+- `onEasyUIInit`, `onEasyUIDeinit` and `onStartupApp` are the FlyThings app entry points
+  (`Z21_TC002_Demo/src/Main.cpp`).
+- `base::wifiOnAndWait(int)` is documented SDK API (`<base/wifi.h>`, base-utility package).
+
+The same README documents a factory restore: hold the reset button beside the USB-C port while
+powering on. It has not been tried on the test clock.
+
+The vendor application is now accepted when it carries a recorded hash (**verified**), or when its
+ELF `.dynsym` defines all four as GLOBAL or WEAK functions (**compatible**). The file is read,
+never loaded:
+
+- The update helper and `/api/v1/tc002/vendor` use `src/tc002/ElfSymbols.cpp`.
+- `install.py` has a stdlib reader with the same rules.
+
+`libmi_ao.so` and `libzknet.so` still need a recorded hash, because the port passes
+hand-measured structures to them; `generate` refuses `symbols` on any other library. The 1.0.1
+and 1.0.8 hashes are not recorded: they pass as compatible, and `verified` stays reserved for
+builds run through docs/VALIDATION.md here.
+
+Other changes:
+
+- `--allow-unverified` passes `--force` to both helper runs, but only when a library was actually
+  unknown. A vendor application without the entry points is refused even with the flag.
+- `--restore` always passes `--force`: the image is the clock's own stock partition. It was
+  refused on every force-installed clock.
+- The installer prints full SHA-256 values and, per file, what would stay off.
+- The preflight output now includes the helper's stderr (`2>&1`).
+- The install step no longer dies on a hanging adb connection.
+- The app reports the vendor application at `vendorApplicationPath()`. RAM trials on a stock clock
+  used to report the post-install path as untrusted.
+
+Tests:
+
+- pytest: 206 passed. CTest: 5 passed. The new ELF reader test runs under ASan and UBSan, with
+  every truncation and 3000 corrupted copies of a fixture library.
+- The Python and C++ readers agree on the ARM launcher `dist/bin/libzkgui.so` (stripped as
+  released: three entry points, no `wifiOnAndWait`) and on about 500 damaged files.
+- The ARM cross build (GCC 9.2) is clean, and the installer bundle passes
+  `check_trial_package.py`.
+- Against a fake `adb` serving a synthetic partition, `--build-only`, `--yes` and `--restore` ran
+  end to end. The helper got `IMG --force` exactly for `--allow-unverified` over an unknown audio
+  library and for `--restore`.
+
+Not run on a clock. On the 1.1.1 test clock:
+
+- `--build-only` should print "defines the launcher's entry points" on the vendor line (the Python
+  reader on the real vendor ELF32).
+- The preflight should print "verified; defines the launcher's 4 entry points" (the C++ reader on
+  ARM).
+- `/api/v1/tc002/vendor` should show `missingSymbols: []`.
+
+The compatible path on real 1.0.1, 1.0.8 and 1.1.3 clocks waits for the reporters.

@@ -30,16 +30,25 @@ whether it is the stable one or the one you requested.
   on Debian/Ubuntu, `brew install squashfs` on macOS). Google's `adb` is downloaded for you.
 - The clock connected to your Wi-Fi with the stock Ulanzi app, on USB power, with TCP port 5555
   reachable. Stock firmware opens it; if the installer cannot connect, stop there.
-- Supported stock firmware: app **1.1.1**, MCU **V1.0.17**. The installer checks the clock's
-  own files against recorded fingerprints and refuses anything else unless told
-  `--allow-unverified`, in which case audio and Wi-Fi provisioning stay off on the clock.
+- Stock firmware: validated on app **1.1.1**, MCU **V1.0.17**; other versions install when the
+  clock's own Ulanzi files pass the checks below (1.0.1 and 1.0.8 have been reported working).
+  - The audio and network libraries must match a recorded SHA-256. If one does not, the
+    installer stops and says what would stay off (audio; or DHCP after the first lease, static
+    addressing and the fallback access point). `--allow-unverified` installs anyway with that
+    off, and the update helper then runs with `--force`.
+  - The Ulanzi application is **verified** by its SHA-256, or **compatible** when it defines
+    the four functions the launcher calls. An application without them is refused, with or
+    without `--allow-unverified`: holding the knob or three failed starts could not bring the
+    stock app back. The installer prints its full SHA-256; please report it in an
+    [issue](https://github.com/sanderdw/awtrix-ng-tc002/issues).
 
 ## What it does
 
 1. Downloads the installer bundle of the chosen release and verifies its checksum.
 2. Reads your clock's application partition (8 MiB) over ADB and checks the vendor files.
-   The stock application is checked at `/res/lib/libzkgui.so`. After installation, its
-   preserved copy is checked at `/res/lib/libulanzi-bootstrap.so` against the same hash.
+   The stock application is checked at `/res/lib/libzkgui.so`, by its SHA-256 or by the entry
+   points in its ELF dynamic symbol table (read, never loaded). After installation, its
+   preserved copy at `/res/lib/libulanzi-bootstrap.so` is checked the same way.
 3. Builds two images **on your computer** from that partition: `update.img` (this port next to
    the vendor application) and `restore-stock.img` (the vendor layout, to go back).
    No firmware file is ever downloaded: the image contains Ulanzi's own application, which
@@ -56,7 +65,16 @@ dump and `restore-stock.img`.
 curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- CLOCK_IP --restore
 ```
 
-This flashes the `restore-stock.img` from your latest run through the same helper.
+This flashes the `restore-stock.img` from your latest run through the same helper, with
+`--force`: the image is your clock's own stock partition, so the fingerprint check (which
+protects the port's calls into vendor code) does not apply.
+
+## Updating from the web UI
+
+System, Maintenance takes an `update.img` built by this installer (`--build-only`). The clock's
+installed helper checks the stock firmware again and never forces. Use the one-line installer
+instead if the clock was installed with `--allow-unverified`, or if it runs a release before
+1.1.2-tc002.3 that was installed by running the helper with `--force` by hand.
 
 ## If the clock does not come back
 
