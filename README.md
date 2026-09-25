@@ -50,6 +50,10 @@ is his. AWTRIX NG is licensed under the
 [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0);
 this port carries its Required Notice and the same licence.
 
+<a href="https://bunq.me/sanderdw"><img src="docs/assets/coffee-outline.svg" width="20" height="20" alt=""></a>
+Want to thank me for the TC002 port itself? [Buy me a coffee](https://bunq.me/sanderdw).
+It appears in the web UI too, after Blueforcer's Ko-fi button.
+
 ![TC002](docs/tc002.jpg)
 
 ## MQTT compatibility
