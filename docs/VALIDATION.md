@@ -3,7 +3,7 @@
 A build is a release candidate until every step below has been run on a real clock with that
 exact build. Only then is `tools/image.py --validated YYYY-MM-DD` used, which is what turns the
 manifest status from "not cold-boot validated" into a dated statement. Record the run in
-`WORKLOG.md` with the version, stock app and MCU versions, and anything that did not go to plan.
+[WORKLOG.md](WORKLOG.md) with the version, stock app and MCU versions, and anything that did not go to plan.
 
 Validated stock firmware: TC002 app **1.1.1**, MCU **V1.0.17**. The firmware refuses to use the
 vendor audio and network libraries, and the updater refuses to install, unless they match the
@@ -59,7 +59,7 @@ what `verified` means.
     after the reboot, and cold boot (step 7) must work on stock.
 13. Reinstall AWTRIX and repeat step 8.
 
-Anything untested stays listed under "Remaining release validation" in `WORKLOG.md`. The serial
+Anything untested stays listed under "Open checks" in [WORKLOG.md](WORKLOG.md). The serial
 console recovery path has never been exercised and is not part of this protocol; a clock that
 neither boots AWTRIX, nor the vendor fallback, nor answers ADB is outside what this port can
 recover today.

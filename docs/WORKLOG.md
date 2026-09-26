@@ -1,16 +1,44 @@
-# TC002 port validation
+# TC002 hardware log
 
-Latest validated candidate: **1.1.0-tc002.4**, with 112 passing pytest cases and
-one passing hardware CTest. The sections below record successive validation
-rounds; earlier version numbers and test counts describe those earlier rounds.
-Paths under `device-private/` and `dist/` refer to local evidence and artifacts
-that are not included in the public repository.
+What was measured on real clocks, newest at the bottom. Record every on-clock run here with the
+commit, version, stock app and MCU versions, what passed and what was not checked. Paths under
+`device-private/`, `dist/` and `~/.awtrix-ng-tc002/` are local evidence, not in the repository.
 
-Upstream: AWTRIX NG 1.1.2, commit `6d6cc64aa6739724d8501199de70c6692cbb2c6c` (earlier rounds: 1.1.1, `73b4582e157484a737397bb0fa616da62212fe9e`; 1.1.0, `4ff1de83428ed13cae6e210dfcbf9d186a09bc60`).
-Device: TC002 stock app 1.1.1, MCU V1.0.17, ARMv7 SSD202D, glibc 2.30.
-Validation date: 2026-09-15. Permanent installation and startup after Linux reboot passed.
+Test clock: TC002 stock app 1.1.1, MCU V1.0.17, ARMv7 SSD202D, glibc 2.30.
 
-## Permanent installation
+## Open checks
+
+- [VALIDATION.md](VALIDATION.md) has not been run on any 1.1.2 build. The last run (1.1.1-tc002.4)
+  passed everything except restoring stock through the web UI and the reinstall after it, which
+  have never been run.
+- Wi-Fi credential changes, static addressing and setting Wi-Fi through the fallback access point
+  are untested on hardware.
+- A real external radio station, playlists and live ICY metadata are untested end to end.
+- Long-running stability and battery operation have not been soak-tested.
+- On 1.1.2: `on_button_event()` from the physical buttons, Modbus reads, JPG icons larger than 8 × 8.
+- Recovery over a serial console or the stock bootloader's update path has never been tried.
+- `growthBudget()` is unbounded (upstream's host behaviour): script buffers have no memory ceiling.
+
+## Display notes
+
+Original corruption: changing transfer timing alone did not fix corruption. An isolated test using
+installed Ulanzi SpiHelper/GpioHelper worked with the same packed pixels.
+Tracing showed GPIO direction writes and SPI setup/readback order differences.
+Matching both fixed the full application. The individual cause was not isolated;
+preserve the user-confirmed sequence.
+
+Flicker (2026-09-15): the owner saw a flickering green LED on the bottom row, pixel 5 from the
+left, in the battery app, while the web preview stayed steady. Palette tests reproduce it with RGB
+0, 66, 0 (`#004200`) and 0, 75, 0 (`#004B00`), also at maximum brightness. The cause (driver, panel
+or controller) is unknown. Workaround: the native battery icon's green border uses 0, 122, 0
+(`#007A00`), the owner's chosen level where it is no longer visible (colours before brightness and
+gamma). This masks the symptom only. Next step: compare the same colours on the same LED with the
+stock firmware.
+
+## 2026-09-15: first permanent install (1.1.0-tc002.1)
+
+Upstream AWTRIX NG 1.1.0, commit `4ff1de83428ed13cae6e210dfcbf9d186a09bc60`. Installation and
+startup after a Linux reboot passed.
 
 - Installed `update.img` SHA-256
   `82eb8251acbea8194ad56311c45573b8eb26667513e7ab8520d817aeee5ee2dd`.
@@ -31,7 +59,7 @@ Validation date: 2026-09-15. Permanent installation and startup after Linux rebo
   unmount/remount passed before the final installation.
 - MQTT is disabled until a broker is configured in the web UI.
 
-## Confirmed on the physical clock
+Confirmed on the physical clock:
 
 - Full AWTRIX app: correct, steady 52 × 16 color bands and border, confirmed by owner.
 - GPIO 35 direction low/high, 1 ms before and after SPI write, 15 ms idle.
@@ -57,63 +85,7 @@ Validation date: 2026-09-15. Permanent installation and startup after Linux rebo
 - Streaming update endpoint rejects an invalid image with HTTP 422; no writes.
 - Actual FlyThings launcher tested from a temporary bundle with the final app,
   TLS and descriptor cleanup. Stock is restored after each bounded trial.
-
 - Update helper preflight passed on the real 8 MiB NOR res partition, with no writes.
-
-## Local checks
-
-- Complete local pytest suite: 62 passed; CTest: 1 passed.
-
-- CTest hardware packing/parser test: passed.
-- Firmware-image tests: 38 passed, including the independent native validator.
-- Host transport tests: Art-Net fills all five universes / 832 pixels; platform
-  capabilities are correct; HTTP authentication survives configuration restart.
-- Original stock image reconstructs byte for byte. Both generated images pass
-  native container validation. Image checks cover CRC, MD5, target, exact length,
-  truncation and filesystem bounds.
-- Final updater links only root-filesystem runtime libraries. It is copied to
-  /tmp before use, validates before stopping the GUI, requires /res to unmount,
-  and reads back each flash erase block before continuing.
-
-## Remaining release validation
-
-- Physical power-cycle startup and restoring the stock recovery image have not
-  been exercised. Installation and automatic startup after Linux reboot passed.
-- 1.1.0-tc002.9 has not been installed on a clock yet. New and untested on hardware:
-  the knob-hold and three-strikes fallback to the vendor application, firmware
-  staging under `/data/awtrix-ng/staging`, the preflight-before-install step, and
-  the vendor fingerprint gate. Run docs/VALIDATION.md before tagging it.
-- Wi-Fi credential changes, static addressing and fallback access-point mode are
-  implemented but untested physically; tests preserved the owner's connection.
-- A real external radio station, playlist and live ICY metadata have not been
-  verified end to end. Local HTTP MP3 streaming and HTTPS transport pass separately.
-- Long-running stability and battery-powered operation have not been soak-tested.
-
-## Intentional platform differences
-
-- Fixed matrix and GPIO mapping; mirror/rotate and button swapping remain available.
-- No ambient-light, temperature or humidity sensor; manual brightness is used.
-- Knob rotation maps to previous/next app; pressing it maps to select.
-- Sleep blanks the panel and pauses services, then restarts the app. It is not
-  hardware deep sleep. Device reboot restarts AWTRIX's process.
-- Firmware update images replace only res, preserving Linux, bootloader and MCU.
-
-## Display diagnosis
-
-Changing transfer timing alone did not fix corruption. An isolated test using
-installed Ulanzi SpiHelper/GpioHelper worked with the same packed pixels.
-Tracing showed GPIO direction writes and SPI setup/readback order differences.
-Matching both fixed the full application. The individual cause was not isolated;
-preserve the user-confirmed sequence.
-
-## RAM test housekeeping
-
-Old temporary test binaries initially consumed almost 7 MiB of RAM filesystem.
-A large TLS diagnostic upload then prevented new ADB shell processes. Truncating
-that diagnostic through ADB sync freed memory, and removing the obsolete test
-copies restored /tmp to about 0.3 MiB. Trial tools now remove their binaries when
-finished. The firmware update handler streams uploads to avoid duplicate bodies.
-
 
 ## 2026-09-15: display scaling correction (1.1.0-tc002.2)
 

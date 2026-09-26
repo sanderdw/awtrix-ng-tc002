@@ -16,7 +16,7 @@ Without options the installer takes the newest **stable** release, the one GitHu
 Latest. Pre-releases are only installed when you ask for one by tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- --version v1.1.2-tc002.2 CLOCK_IP
+curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- --version TAG CLOCK_IP
 ```
 
 `--version` may come before or after `CLOCK_IP`; the tag is listed on the
@@ -88,10 +88,7 @@ instead if the clock was installed with `--allow-unverified`, or if it runs a re
 - A power cut during the write leaves a partition that needs the stock bootloader's own update
   path or a serial connection; that has never been exercised. Do not unplug during the write.
 
-## Risks, plainly
+## Risks
 
-Installing rewrites the clock's application partition in place; there is no second copy on
-the device. The helper validates the image, checks the flash geometry and the stock firmware,
-and verifies every block it writes, and the launcher can fall back to the stock app, but a
-firmware you flash onto a clock is yours to recover. Read the
-[README's Risks section](https://github.com/sanderdw/awtrix-ng-tc002#risks) first.
+Installing rewrites the clock's application partition in place; there is no second copy on the
+device. Read the [README's Risks section](https://github.com/sanderdw/awtrix-ng-tc002#risks) first.

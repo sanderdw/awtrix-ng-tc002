@@ -1,7 +1,7 @@
 # Attribution and source provenance
 
 This is an unofficial TC002 platform port of **AWTRIX NG 1.1.2**, by Blueforcer
-and its contributors, at commit `73b4582e157484a737397bb0fa616da62212fe9e`:
+and its contributors, at commit `6d6cc64aa6739724d8501199de70c6692cbb2c6c`:
 https://github.com/Blueforcer/awtrix-ng
 
 The application and this port are distributed under PolyForm Noncommercial 1.0.0;

@@ -8,11 +8,8 @@ normal AWTRIX settings and the stock application are not replaced.
 Hardware validation so far covers TC002 stock app 1.1.1 and MCU V1.0.17. This is
 an experimental port, not a guarantee that every TC002 revision will work.
 
-[Choose a versioned trial release](https://github.com/sanderdw/awtrix-ng-tc002/releases)
-and download its trial ZIP and SHA-256 checksum. Each release has its own fixed
-tag and downloads, published after GitHub Actions tests and builds that version.
-Check `manifest.json` inside the ZIP for the version and source commit. New builds
-are experimental; your clock will not download or install them automatically.
+Download the trial ZIP from a [release](https://github.com/sanderdw/awtrix-ng-tc002/releases);
+`manifest.json` inside records its version and source commit.
 
 ## Before starting
 
@@ -70,16 +67,9 @@ interrupting a firmware installation. Start only one trial at a time.
 
 ## Permanent installation
 
-The trial ZIP is not a firmware update image. Permanent installation writes
-flash and reboots; it needs a backup and a recovery plan. Build that image locally
-from your own clock's original stock `/res` backup and a valid stock TC002 update
-container, following the project's README. Keep those personal files private.
+The trial ZIP does not install anything. To install, use the one-line installer:
+https://github.com/sanderdw/awtrix-ng-tc002/blob/main/docs/INSTALL.md
 
-The web UI's documentation button and icon editor load from the upstream
-author's hosting. Please support AWTRIX NG at https://ko-fi.com/blueforcer.
-
-Source and installation documentation:
-https://github.com/sanderdw/awtrix-ng-tc002
-
-The archive includes the application license and third-party notices. Proprietary
-runtime libraries are loaded from your clock; none are included in this download.
+The web UI's documentation button and icon editor load from the upstream author's hosting.
+Please support AWTRIX NG at https://ko-fi.com/blueforcer. This archive includes the licence and
+third-party notices; the clock's proprietary libraries are not included.

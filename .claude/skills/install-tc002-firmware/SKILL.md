@@ -144,7 +144,7 @@ the trial could not prove and the user should look at, and the path of `restore-
 this run — they need it to go back.
 
 Then record it. This project treats anything not run on a clock as unvalidated, so add a dated
-WORKLOG.md entry with the commit, what the trial and the install showed, and what was *not* checked.
+`docs/WORKLOG.md` entry with the commit, what the trial and the install showed, and what was *not* checked.
 A development install is not a `docs/VALIDATION.md` run: cold boots, knob-hold fallback,
 three-strikes fallback and restore-stock remain separate owner steps before tagging a release.
 Leave committing to the user unless asked.
