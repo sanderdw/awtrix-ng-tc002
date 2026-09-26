@@ -749,3 +749,20 @@ records `scriptHeapBudgetBytes` 1048576.
 Not run on a clock. `growthBudget()` on this build is still unbounded (upstream's host
 behaviour), so buffers scripts request (HTTP bodies, shared state) have no memory-based ceiling
 on the clock; that is a separate change.
+
+## 2026-09-26: 1.1.2-tc002.3 on a reporter's clock; trial ZIP ships `paths.py`
+
+The #6 and #9 reporter ran the `v1.1.2-tc002.3-pr10` build (70ecf12) on a stock SoC 1.0.1,
+MCU V1.0.16 clock. RAM trial, 180 s: `scriptHeapBudgetBytes` 1048576, seven scripts installed
+together, 42 FPS on each, the installed firmware back at the end. Install with the one-line
+installer over their own 1.1.2-tc002.2 build, without `--allow-unverified`:
+`libulanzi-bootstrap.so` **compatible** (all four entry points), `libmi_ao.so` and `libzknet.so`
+**verified**, helper preflight passed, 1.1.2-tc002.3 answering about a minute later. After the
+reboot: 42 FPS, Wi-Fi, audio capabilities on, and `/data` intact (8 scripts with their config,
+uploaded icons, settings).
+
+The trial ZIP never contained `tools/paths.py`, which `try.py` imports for the adb lookup, so
+every trial ZIP since 1.1.1-tc002.1 needed it copied in by hand. `check_trial_package.py` ran
+`try.py --help`, which exits in argparse before that import. The import now sits with the other
+imports, `package_trial.py` ships `paths.py`, and the checker requires it: a ZIP without it fails
+`try.py --help`.

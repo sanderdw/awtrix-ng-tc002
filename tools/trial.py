@@ -14,6 +14,9 @@ import tempfile
 import time
 import urllib.request
 
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from paths import adb as find_adb  # noqa: E402  shipped next to try.py in the trial ZIP
+
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('host')
 p.add_argument('--seconds',type=int,default=120)
@@ -29,8 +32,6 @@ for item in a.config:
     except ValueError: sep=''
     if not key or not sep: p.error(f'--config expects KEY=JSON, got {item!r}')
 if not 20<=a.seconds<=600: p.error('seconds must be between 20 and 600')
-sys.path.insert(0,str(Path(__file__).resolve().parent))
-from paths import adb as find_adb
 adb=find_adb()
 serial=a.host+':5555'
 def device(*args):
