@@ -33,6 +33,7 @@ def main():
     files = {
         'bin/awtrix-tc002': binary,
         'try.py': (ROOT / 'tools/trial.py').read_bytes(),
+        'paths.py': (ROOT / 'tools/paths.py').read_bytes(),
         'README.md': (ROOT / 'docs/TRY-IT.md').read_bytes(),
         'upstream/awtrix-ng/webui/index.html': (ROOT / 'build-webui/index.html').read_bytes(),
         'assets/cacert.pem': (ROOT / 'assets/cacert.pem').read_bytes(),

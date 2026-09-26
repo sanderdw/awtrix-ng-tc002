@@ -6,9 +6,9 @@
   flash_dev_build.py CLOCK_IP --restore --yes   flash the latest restore-stock.img back
 
 Why this wrapper exists: tools/install.py only finds vendor-fingerprints.json in the packaged
-bundle layout, so it is packaged into a temporary directory and run from there; and its flash step
-dies on a 120 s adb timeout when the clock reboots under it, although the write completes, so this
-script keeps watching the clock instead of reporting a failure.
+bundle layout, so it is packaged into a temporary directory and run from there. If the installer
+dies after the write has started (its flash step's adb connection can hang while the clock
+reboots), this script keeps watching the clock instead of reporting a failure.
 
 Flashing needs --yes because the installer's typed confirmation reads /dev/tty, which an agent
 cannot answer. Pass it only after the person has agreed to this clock being rewritten.

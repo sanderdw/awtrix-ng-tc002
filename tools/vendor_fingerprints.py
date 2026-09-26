@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,11 +24,32 @@ def load():
     return json.loads(JSON.read_text())
 
 
+# Only the vendor application may be accepted by the functions it defines: the launcher calls
+# nothing else in it. The other libraries get hand-measured structures and need an exact build.
+SYMBOLS_ALLOWED = {'libulanzi-bootstrap.so'}
+SYMBOL_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
+
+
+def check_symbols(name, entry):
+    symbols = entry.get('symbols')
+    if symbols is None:
+        return []
+    if name not in SYMBOLS_ALLOWED:
+        raise SystemExit(f'{name}: symbols are only accepted for the vendor application; '
+                         'the port passes hand-measured structures to the others')
+    if (not isinstance(symbols, list) or not symbols or len(set(symbols)) != len(symbols)
+            or not all(isinstance(s, str) and SYMBOL_NAME.fullmatch(s) for s in symbols)):
+        raise SystemExit(f'{name}: symbols must be a non-empty list of distinct C identifiers')
+    return symbols
+
+
 def generate(output):
     data = load()
     lines = ['// Generated from src/tc002/vendor-fingerprints.json by tools/vendor_fingerprints.py; do not edit.',
              '#pragma once', '', 'namespace tc002 {', '',
              'struct VendorFingerprint { const char* library; const char* path; const char* sha256; };',
+             'struct VendorFile { const char* library; const char* path; };',
+             'struct VendorSymbol { const char* library; const char* name; };',
              f'inline constexpr const char* kStockApp = "{data["stock"]["app"]}";',
              f'inline constexpr const char* kStockMcu = "{data["stock"]["mcu"]}";',
              'inline constexpr VendorFingerprint kVendorFingerprints[] = {']
@@ -38,13 +60,25 @@ def generate(output):
             if digest and (len(digest) != 64 or not entry.get('path')):
                 raise SystemExit(f'{name}: a hash needs a 64-character digest and a path')
             lines.append(f'  {{"{name}", "{entry.get("path") or ""}", "{digest}"}},')
-    lines += ['  {nullptr, nullptr, nullptr},', '};', '', '}', '']
+    lines += ['  {nullptr, nullptr, nullptr},', '};', '// One entry per library, in the order of the JSON.',
+              'inline constexpr VendorFile kVendorFiles[] = {']
+    lines += [f'  {{"{name}", "{entry.get("path") or ""}"}},' for name, entry in data['libraries'].items()]
+    lines += ['  {nullptr, nullptr},', '};',
+              '// Functions a library may define in its ELF dynamic symbol table instead of carrying a recorded hash.',
+              'inline constexpr VendorSymbol kVendorSymbols[] = {']
+    symbols = 0
+    for name, entry in data['libraries'].items():
+        for symbol in check_symbols(name, entry):
+            lines.append(f'  {{"{name}", "{symbol}"}},')
+            symbols += 1
+    lines += ['  {nullptr, nullptr},', '};', '', '}', '']
     text = '\n'.join(lines)
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     if not output.exists() or output.read_text() != text:
         output.write_text(text)
-    print(f'vendor fingerprints: {sum(len(e["sha256"]) for e in data["libraries"].values())} recorded')
+    print(f'vendor fingerprints: {sum(len(e["sha256"]) for e in data["libraries"].values())} recorded, '
+          f'{symbols} required symbols')
 
 
 def capture(host):

@@ -1,16 +1,44 @@
-# TC002 port validation
+# TC002 hardware log
 
-Latest validated candidate: **1.1.0-tc002.4**, with 112 passing pytest cases and
-one passing hardware CTest. The sections below record successive validation
-rounds; earlier version numbers and test counts describe those earlier rounds.
-Paths under `device-private/` and `dist/` refer to local evidence and artifacts
-that are not included in the public repository.
+What was measured on real clocks, newest at the bottom. Record every on-clock run here with the
+commit, version, stock app and MCU versions, what passed and what was not checked. Paths under
+`device-private/`, `dist/` and `~/.awtrix-ng-tc002/` are local evidence, not in the repository.
 
-Upstream: AWTRIX NG 1.1.2, commit `6d6cc64aa6739724d8501199de70c6692cbb2c6c` (earlier rounds: 1.1.1, `73b4582e157484a737397bb0fa616da62212fe9e`; 1.1.0, `4ff1de83428ed13cae6e210dfcbf9d186a09bc60`).
-Device: TC002 stock app 1.1.1, MCU V1.0.17, ARMv7 SSD202D, glibc 2.30.
-Validation date: 2026-09-15. Permanent installation and startup after Linux reboot passed.
+Test clock: TC002 stock app 1.1.1, MCU V1.0.17, ARMv7 SSD202D, glibc 2.30.
 
-## Permanent installation
+## Open checks
+
+- [VALIDATION.md](VALIDATION.md) has not been run on any 1.1.2 build. The last run (1.1.1-tc002.4)
+  passed everything except restoring stock through the web UI and the reinstall after it, which
+  have never been run.
+- Wi-Fi credential changes, static addressing and setting Wi-Fi through the fallback access point
+  are untested on hardware.
+- A real external radio station, playlists and live ICY metadata are untested end to end.
+- Long-running stability and battery operation have not been soak-tested.
+- On 1.1.2: `on_button_event()` from the physical buttons, Modbus reads, JPG icons larger than 8 × 8.
+- Recovery over a serial console or the stock bootloader's update path has never been tried.
+- `growthBudget()` is unbounded (upstream's host behaviour): script buffers have no memory ceiling.
+
+## Display notes
+
+Original corruption: changing transfer timing alone did not fix corruption. An isolated test using
+installed Ulanzi SpiHelper/GpioHelper worked with the same packed pixels.
+Tracing showed GPIO direction writes and SPI setup/readback order differences.
+Matching both fixed the full application. The individual cause was not isolated;
+preserve the user-confirmed sequence.
+
+Flicker (2026-09-15): the owner saw a flickering green LED on the bottom row, pixel 5 from the
+left, in the battery app, while the web preview stayed steady. Palette tests reproduce it with RGB
+0, 66, 0 (`#004200`) and 0, 75, 0 (`#004B00`), also at maximum brightness. The cause (driver, panel
+or controller) is unknown. Workaround: the native battery icon's green border uses 0, 122, 0
+(`#007A00`), the owner's chosen level where it is no longer visible (colours before brightness and
+gamma). This masks the symptom only. Next step: compare the same colours on the same LED with the
+stock firmware.
+
+## 2026-09-15: first permanent install (1.1.0-tc002.1)
+
+Upstream AWTRIX NG 1.1.0, commit `4ff1de83428ed13cae6e210dfcbf9d186a09bc60`. Installation and
+startup after a Linux reboot passed.
 
 - Installed `update.img` SHA-256
   `82eb8251acbea8194ad56311c45573b8eb26667513e7ab8520d817aeee5ee2dd`.
@@ -31,7 +59,7 @@ Validation date: 2026-09-15. Permanent installation and startup after Linux rebo
   unmount/remount passed before the final installation.
 - MQTT is disabled until a broker is configured in the web UI.
 
-## Confirmed on the physical clock
+Confirmed on the physical clock:
 
 - Full AWTRIX app: correct, steady 52 × 16 color bands and border, confirmed by owner.
 - GPIO 35 direction low/high, 1 ms before and after SPI write, 15 ms idle.
@@ -57,63 +85,7 @@ Validation date: 2026-09-15. Permanent installation and startup after Linux rebo
 - Streaming update endpoint rejects an invalid image with HTTP 422; no writes.
 - Actual FlyThings launcher tested from a temporary bundle with the final app,
   TLS and descriptor cleanup. Stock is restored after each bounded trial.
-
 - Update helper preflight passed on the real 8 MiB NOR res partition, with no writes.
-
-## Local checks
-
-- Complete local pytest suite: 62 passed; CTest: 1 passed.
-
-- CTest hardware packing/parser test: passed.
-- Firmware-image tests: 38 passed, including the independent native validator.
-- Host transport tests: Art-Net fills all five universes / 832 pixels; platform
-  capabilities are correct; HTTP authentication survives configuration restart.
-- Original stock image reconstructs byte for byte. Both generated images pass
-  native container validation. Image checks cover CRC, MD5, target, exact length,
-  truncation and filesystem bounds.
-- Final updater links only root-filesystem runtime libraries. It is copied to
-  /tmp before use, validates before stopping the GUI, requires /res to unmount,
-  and reads back each flash erase block before continuing.
-
-## Remaining release validation
-
-- Physical power-cycle startup and restoring the stock recovery image have not
-  been exercised. Installation and automatic startup after Linux reboot passed.
-- 1.1.0-tc002.9 has not been installed on a clock yet. New and untested on hardware:
-  the knob-hold and three-strikes fallback to the vendor application, firmware
-  staging under `/data/awtrix-ng/staging`, the preflight-before-install step, and
-  the vendor fingerprint gate. Run docs/VALIDATION.md before tagging it.
-- Wi-Fi credential changes, static addressing and fallback access-point mode are
-  implemented but untested physically; tests preserved the owner's connection.
-- A real external radio station, playlist and live ICY metadata have not been
-  verified end to end. Local HTTP MP3 streaming and HTTPS transport pass separately.
-- Long-running stability and battery-powered operation have not been soak-tested.
-
-## Intentional platform differences
-
-- Fixed matrix and GPIO mapping; mirror/rotate and button swapping remain available.
-- No ambient-light, temperature or humidity sensor; manual brightness is used.
-- Knob rotation maps to previous/next app; pressing it maps to select.
-- Sleep blanks the panel and pauses services, then restarts the app. It is not
-  hardware deep sleep. Device reboot restarts AWTRIX's process.
-- Firmware update images replace only res, preserving Linux, bootloader and MCU.
-
-## Display diagnosis
-
-Changing transfer timing alone did not fix corruption. An isolated test using
-installed Ulanzi SpiHelper/GpioHelper worked with the same packed pixels.
-Tracing showed GPIO direction writes and SPI setup/readback order differences.
-Matching both fixed the full application. The individual cause was not isolated;
-preserve the user-confirmed sequence.
-
-## RAM test housekeeping
-
-Old temporary test binaries initially consumed almost 7 MiB of RAM filesystem.
-A large TLS diagnostic upload then prevented new ADB shell processes. Truncating
-that diagnostic through ADB sync freed memory, and removing the obsolete test
-copies restored /tmp to about 0.3 MiB. Trial tools now remove their binaries when
-finished. The firmware update handler streams uploads to avoid duplicate bodies.
-
 
 ## 2026-09-15: display scaling correction (1.1.0-tc002.2)
 
@@ -653,3 +625,124 @@ discovery were switched back on at 16:28:12 (they had been off since the owner t
 The knob events and the coffee link ship as **1.1.2-tc002.2**: `v1.1.2-tc002.1` was already
 tagged and published on 2026-09-22, and the development install above still reported that
 number, which made the two builds indistinguishable on the clock.
+
+## 2026-09-25: vendor application accepted by its entry points (issues #8, #6; 1.1.2-tc002.3)
+
+Three clocks on other stock versions could not install:
+
+- #8: app 1.1.3 / MCU V1.0.17. The installer refused `/res/lib/libzkgui.so`, and
+  `--allow-unverified` could not finish because `install.py` never passed `--force` to the
+  helper.
+- #6: SoC 1.0.1 / MCU V1.0.16 (`libzkgui.so` `4b8783e1…`) and SoC 1.0.8 / MCU V1.0.17
+  (`de15dd84…`). On both, `libmi_ao.so` and `libzknet.so` match the recorded hashes. Both
+  reporters installed by running the helper with `--force` by hand: AWTRIX boots, Wi-Fi
+  connects, 42 FPS, audio library trusted. `nm -D` shows all four launcher symbols in both
+  builds.
+
+Ulanzi's own repository (UlanziTechnology/Ulanzi-U-Clock-TC002) shows what those four symbols
+are:
+
+- `onEasyUIInit`, `onEasyUIDeinit` and `onStartupApp` are the FlyThings app entry points
+  (`Z21_TC002_Demo/src/Main.cpp`).
+- `base::wifiOnAndWait(int)` is documented SDK API (`<base/wifi.h>`, base-utility package).
+
+The same README documents a factory restore: hold the reset button beside the USB-C port while
+powering on. It has not been tried on the test clock.
+
+The vendor application is now accepted when it carries a recorded hash (**verified**), or when its
+ELF `.dynsym` defines all four as GLOBAL or WEAK functions (**compatible**). The file is read,
+never loaded:
+
+- The update helper and `/api/v1/tc002/vendor` use `src/tc002/ElfSymbols.cpp`.
+- `install.py` has a stdlib reader with the same rules.
+
+`libmi_ao.so` and `libzknet.so` still need a recorded hash, because the port passes
+hand-measured structures to them; `generate` refuses `symbols` on any other library. The 1.0.1
+and 1.0.8 hashes are not recorded: they pass as compatible, and `verified` stays reserved for
+builds run through docs/VALIDATION.md here.
+
+Other changes:
+
+- `--allow-unverified` passes `--force` to both helper runs, but only when a library was actually
+  unknown. A vendor application without the entry points is refused even with the flag.
+- `--restore` always passes `--force`: the image is the clock's own stock partition. It was
+  refused on every force-installed clock.
+- The installer prints full SHA-256 values and, per file, what would stay off.
+- The preflight output now includes the helper's stderr (`2>&1`).
+- The install step no longer dies on a hanging adb connection.
+- The app reports the vendor application at `vendorApplicationPath()`. RAM trials on a stock clock
+  used to report the post-install path as untrusted.
+
+Tests:
+
+- pytest: 206 passed. CTest: 5 passed. The new ELF reader test runs under ASan and UBSan, with
+  every truncation and 3000 corrupted copies of a fixture library.
+- The Python and C++ readers agree on the ARM launcher `dist/bin/libzkgui.so` (stripped as
+  released: three entry points, no `wifiOnAndWait`) and on about 500 damaged files.
+- The ARM cross build (GCC 9.2) is clean, and the installer bundle passes
+  `check_trial_package.py`.
+- Against a fake `adb` serving a synthetic partition, `--build-only`, `--yes` and `--restore` ran
+  end to end. The helper got `IMG --force` exactly for `--allow-unverified` over an unknown audio
+  library and for `--restore`.
+
+Not run on a clock. On the 1.1.1 test clock:
+
+- `--build-only` should print "defines the launcher's entry points" on the vendor line (the Python
+  reader on the real vendor ELF32).
+- The preflight should print "verified; defines the launcher's 4 entry points" (the C++ reader on
+  ARM).
+- `/api/v1/tc002/vendor` should show `missingSymbols: []`.
+
+The compatible path on real 1.0.1, 1.0.8 and 1.1.3 clocks waits for the reporters.
+
+## 2026-09-25: script heap budget sized for the clock (issue #9, 1.1.2-tc002.3)
+
+On the TC002 the Berry VM uses the host allocator (`ScriptHeapNative.cpp`, plain malloc), and its
+budget was upstream's ESP32 internal-RAM value, 96 KB. The clock reports 12 to 15 MB available
+while AWTRIX runs, yet a sixth average script was refused with `insufficientStorage` (#9). The
+reporter ran a 1 MiB budget on a SoC 1.0.1 clock: six scripts together, 42 FPS, free memory down
+by about 330 KB.
+
+Patch 0010 makes the budget a build-time setting, `AWTRIX_SCRIPT_HEAP_BUDGET_BYTES`. The default
+stays 96 KB, so upstream, the simulator and ESP32 builds are unchanged. `CMakeLists.txt` sets
+1 MiB for the clock.
+
+The budget only refuses new installs once the shared heap is past it; running scripts can still
+grow. It is not derived from free memory like upstream's PSRAM path (half the free pool), which
+would be about 6 MB here. The adb installer stages about 4.5 MB in the RAM-backed `/tmp`, and the
+clock has no swap, so a fixed, modest share is safer.
+
+Measured on the host with upstream's `fatApp()` test script (about 9 KB of heap each): at 96 KB
+the tenth install was refused ("shared Berry heap 101153 bytes is over the 98304 byte internal
+budget"); at 1 MiB, 112 install before the budget refuses. `test_scripts_share_a_one_mebibyte_heap`
+installs until refused and checks both the count and the message. The golden device state now
+records `scriptHeapBudgetBytes` 1048576.
+
+Not run on a clock. `growthBudget()` on this build is still unbounded (upstream's host
+behaviour), so buffers scripts request (HTTP bodies, shared state) have no memory-based ceiling
+on the clock; that is a separate change.
+
+## 2026-09-26: 1.1.2-tc002.3 on a reporter's clock; trial ZIP ships `paths.py`
+
+The #6 and #9 reporter ran the `v1.1.2-tc002.3-pr10` build (70ecf12) on a stock SoC 1.0.1,
+MCU V1.0.16 clock. RAM trial, 180 s: `scriptHeapBudgetBytes` 1048576, seven scripts installed
+together, 42 FPS on each, the installed firmware back at the end. Install with the one-line
+installer over their own 1.1.2-tc002.2 build, without `--allow-unverified`:
+`libulanzi-bootstrap.so` **compatible** (all four entry points), `libmi_ao.so` and `libzknet.so`
+**verified**, helper preflight passed, 1.1.2-tc002.3 answering about a minute later. After the
+reboot: 42 FPS, Wi-Fi, audio capabilities on, and `/data` intact (8 scripts with their config,
+uploaded icons, settings).
+
+The trial ZIP never contained `tools/paths.py`, which `try.py` imports for the adb lookup, so
+every trial ZIP since 1.1.1-tc002.1 needed it copied in by hand. `check_trial_package.py` ran
+`try.py --help`, which exits in argparse before that import. The import now sits with the other
+imports, `package_trial.py` ships `paths.py`, and the checker requires it: a ZIP without it fails
+`try.py --help`.
+
+Two more from #6. `GET /api/v1/tc002/vendor` called the recorded reference build `stock`, which on
+a 1.0.1 / V1.0.16 clock read as a wrong detection; the key is now `reference`. The clock's own
+versions are not reported there: the MCU version stays inside `Tc002Hardware` and the stock app
+version is not read anywhere. And `tools/install.py` now falls back to
+`src/tc002/vendor-fingerprints.json` when no bundled copy sits next to it, like `bundle_paths()`
+does for the binaries, so it runs from a checkout; `test_vendor_gate.py` no longer patches that
+lookup out.

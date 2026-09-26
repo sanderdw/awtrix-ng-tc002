@@ -3,25 +3,32 @@
 A build is a release candidate until every step below has been run on a real clock with that
 exact build. Only then is `tools/image.py --validated YYYY-MM-DD` used, which is what turns the
 manifest status from "not cold-boot validated" into a dated statement. Record the run in
-`WORKLOG.md` with the version, stock app and MCU versions, and anything that did not go to plan.
+[WORKLOG.md](WORKLOG.md) with the version, stock app and MCU versions, and anything that did not go to plan.
 
-Supported stock firmware: TC002 app **1.1.1**, MCU **V1.0.17**. The firmware refuses to use the
-vendor audio and network libraries, and the updater refuses to install, unless the files on the
-clock match the hashes in `src/tc002/vendor-fingerprints.json`. Capture them once per supported
-stock version with `uv run tools/vendor_fingerprints.py capture CLOCK_IP` and commit the JSON.
+Validated stock firmware: TC002 app **1.1.1**, MCU **V1.0.17**. The firmware refuses to use the
+vendor audio and network libraries, and the updater refuses to install, unless they match the
+hashes in `src/tc002/vendor-fingerprints.json`. The Ulanzi application must match a hash there
+or define every function listed under its `symbols` (the launcher's entry points). Run this
+protocol on a clock before recording its hashes with
+`uv run tools/vendor_fingerprints.py capture CLOCK_IP`, and commit the JSON: a recorded hash is
+what `verified` means.
 
 ## Before flashing
 
 1. Keep the clock on USB power for the whole protocol.
 2. Have `restore-stock.img` built from this clock's own `/res` dump, and a working ADB connection.
-3. `tc002-update --preflight update.img` on the clock passes.
+3. `tc002-update --preflight update.img` on the clock passes without `--force`, and prints
+   `verified; defines the launcher's 4 entry points` for `libulanzi-bootstrap.so`.
 
 ## Install and warm restart
 
 4. Install through the web UI (System, Maintenance). The response must be 202 and the clock must
    come back with the new version in `/api/v1/version` within three minutes.
-5. `GET /api/v1/tc002/vendor` reports every library `trusted: true`. If any is false, audio or
-   Wi-Fi provisioning is deliberately disabled: stop here and capture fingerprints first.
+5. `GET /api/v1/tc002/vendor` reports every library with `status: verified` and the vendor
+   application with `missingSymbols: []`. `compatible` for `libulanzi-bootstrap.so` means this
+   clock's stock version has no recorded hash yet; `unknown` for `libmi_ao.so` or `libzknet.so`
+   means audio or networking is deliberately disabled. Either way, stop here and capture
+   fingerprints first.
 6. Reboot Linux (`uv run tools/device.py CLOCK_IP shell reboot`; the web UI's Reboot only
    restarts the AWTRIX process). The clock comes back on its own within a minute.
 
@@ -52,7 +59,7 @@ stock version with `uv run tools/vendor_fingerprints.py capture CLOCK_IP` and co
     after the reboot, and cold boot (step 7) must work on stock.
 13. Reinstall AWTRIX and repeat step 8.
 
-Anything untested stays listed under "Remaining release validation" in `WORKLOG.md`. The serial
+Anything untested stays listed under "Open checks" in [WORKLOG.md](WORKLOG.md). The serial
 console recovery path has never been exercised and is not part of this protocol; a clock that
 neither boots AWTRIX, nor the vendor fallback, nor answers ADB is outside what this port can
 recover today.

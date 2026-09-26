@@ -8444,7 +8444,7 @@
   }
  },
  "version": {
-  "version": "1.1.2-tc002.2"
+  "version": "1.1.2-tc002.3"
  },
  "device": {
   "boardType": "tc002",
@@ -8452,7 +8452,7 @@
   "updateImage": "",
   "scriptingRunning": true,
   "scriptHeapPool": "internal",
-  "scriptHeapBudgetBytes": 98304,
+  "scriptHeapBudgetBytes": 1048576,
   "brightness": 255,
   "matrixPower": true,
   "indicators": [

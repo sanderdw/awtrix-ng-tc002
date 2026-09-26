@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  # Pull requests from this repository also publish a test pre-release (see publish-pull-request).
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
 
 permissions:
@@ -15,13 +19,19 @@ concurrency:
 
 jobs:
   build:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      # A pull request is built from its head commit, not GitHub's merge commit, so a test build
+      # names a commit that exists on the branch.
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           submodules: true
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: '0.12.14'
@@ -64,9 +74,9 @@ jobs:
       - name: Package and verify the public trial and installer bundles
         run: |
           uv run tools/package_trial.py
-          uv run tools/check_trial_package.py dist/public/awtrix-ng-tc002-trial.zip --commit "$GITHUB_SHA"
+          uv run tools/check_trial_package.py dist/public/awtrix-ng-tc002-trial.zip --commit "$SOURCE_SHA"
           uv run tools/package_installer.py
-          uv run tools/check_trial_package.py dist/public/awtrix-ng-tc002-installer.zip --commit "$GITHUB_SHA"
+          uv run tools/check_trial_package.py dist/public/awtrix-ng-tc002-installer.zip --commit "$SOURCE_SHA"
           cp install.sh dist/public/install.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -121,3 +131,88 @@ jobs:
             dist/public/install.sh \
             --verify-tag --prerelease --latest=false \
             --title "AWTRIX NG TC002 $tag (experimental RAM trial)" --notes-file "$notes"
+
+  # One test pre-release per pull request, tagged v<version>-pr<number> so that
+  #   install.sh --version v<version>-pr<number> CLOCK_IP
+  # installs it. Every push replaces it, and closing the pull request deletes it. Only for pull
+  # requests from this repository: a fork's token cannot create releases.
+  publish-pull-request:
+    if: >-
+      github.event_name == 'pull_request' && github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: experimental-trial
+          path: dist/public
+      - name: Replace the pull request's test pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          (cd dist/public && sha256sum -c awtrix-ng-tc002-trial.zip.sha256 && sha256sum -c awtrix-ng-tc002-installer.zip.sha256)
+          version=$(sed -n 's/.*AWTRIX_NG_VERSION="\([^"]*\)".*/\1/p' CMakeLists.txt)
+          tag="v$version-pr$PR"
+          # Remove this pull request's previous test build, whatever version it carried. Only
+          # pre-releases ending in -pr<number> are touched; version tags never end that way.
+          gh release list --limit 200 --json tagName,isPrerelease --jq '.[] | select(.isPrerelease) | .tagName' |
+            { grep -E -- "-pr$PR\$" || true; } |
+            while read -r old; do gh release delete "$old" --cleanup-tag --yes; done
+          notes="$RUNNER_TEMP/pull-request-release.md"
+          {
+            printf '> **Test build of pull request [#%s](https://github.com/%s/pull/%s)**, commit %s. It is\n' \
+              "$PR" "$GH_REPO" "$PR" "${SOURCE_SHA:0:12}"
+            printf '> replaced on every push to the pull request and deleted when it closes; the clock reports\n'
+            printf '> version %s.\n\n' "$version"
+            # The notes of the version this pull request prepares, when it has them.
+            sed -e "/@CHANGES@/{r docs/releases/v$version.md" -e 'd' -e '}' -e "s/@TAG@/$tag/g" docs/TRIAL-RELEASE.md
+            printf '\n## Build\n\nSource: [%s](https://github.com/%s/commit/%s)\n\n[Build and checks](https://github.com/%s/actions/runs/%s)\n' \
+              "$SOURCE_SHA" "$GH_REPO" "$SOURCE_SHA" "$GH_REPO" "$GITHUB_RUN_ID"
+          } > "$notes"
+          gh release create "$tag" \
+            dist/public/awtrix-ng-tc002-trial.zip \
+            dist/public/awtrix-ng-tc002-trial.zip.sha256 \
+            dist/public/awtrix-ng-tc002-installer.zip \
+            dist/public/awtrix-ng-tc002-installer.zip.sha256 \
+            dist/public/install.sh \
+            --target "$SOURCE_SHA" --prerelease --latest=false \
+            --title "AWTRIX NG TC002 $tag (test build of pull request #$PR)" --notes-file "$notes"
+          {
+            echo "Test pre-release [$tag](https://github.com/$GH_REPO/releases/tag/$tag). Install it with:"
+            echo '```sh'
+            echo "curl -fsSL https://raw.githubusercontent.com/$GH_REPO/main/install.sh | sh -s -- --version $tag CLOCK_IP"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  remove-pull-request-release:
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Delete the pull request's test pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh release list --limit 200 --json tagName,isPrerelease --jq '.[] | select(.isPrerelease) | .tagName' |
+            { grep -E -- "-pr$PR\$" || true; } |
+            while read -r tag; do gh release delete "$tag" --cleanup-tag --yes; done

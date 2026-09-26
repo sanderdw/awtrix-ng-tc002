@@ -91,12 +91,11 @@ python3 .claude/skills/install-tc002-firmware/scripts/flash_dev_build.py CLOCK_I
 python3 .claude/skills/install-tc002-firmware/scripts/flash_dev_build.py CLOCK_IP --yes
 ```
 
-Why the wrapper: run from the repository, `tools/install.py` fails looking for
-`vendor-fingerprints.json` (it only exists in the packaged bundle), so the wrapper packages the
-bundle with `tools/package_installer.py` into a temporary directory and runs the installer from
-there. And the installer's flash step uses a 120 s `adb shell` that hangs when the clock reboots
-under it, raising `TimeoutExpired` *after the write has started*; the wrapper recognises that and
-keeps polling the clock instead of reporting failure. It uses `$ADB` or
+Why the wrapper: it packages the bundle with `tools/package_installer.py` into a temporary
+directory and runs the installer from there, so the clock gets exactly what a release ZIP would
+install. The installer's flash step uses a 120 s `adb shell` that can hang while the clock reboots
+under it; the installer now tolerates that and keeps waiting for the clock, and the wrapper still
+keeps polling if an installer dies *after the write has started* instead of reporting failure. It uses `$ADB` or
 `build-deps/platform-tools/adb`; failing those, the installer looks on `PATH` and otherwise
 downloads Google's platform-tools into `~/.awtrix-ng-tc002/`.
 
@@ -106,14 +105,24 @@ before the write, and a refusal there still stops with nothing written. `--yes` 
 the installer's typed `flash` confirmation reads `/dev/tty`, which you cannot answer; the user's
 request is the confirmation.
 
-A healthy run prints, in order: the current version; three vendor files `verified`; the sizes of
+A healthy run prints, in order: the current version; three vendor files `verified` (the Ulanzi
+application, `libulanzi-bootstrap.so`, may instead read `compatible` with its full SHA-256 on a
+stock version other than 1.1.1: it has no recorded hash but defines the launcher's entry points,
+and that is fine); the sizes of
 `update.img` and `restore-stock.img` and the run directory under `~/.awtrix-ng-tc002/CLOCK_IP/`;
 `Preflight passed: ... nothing written`; the warning; "installing". Stops before "installing" wrote
 nothing and are safe to investigate and retry:
 
-- *fingerprints do not match* — the clock's stock firmware is not app 1.1.1 / MCU V1.0.17. Do not
-  add `--allow-unverified` on your own: explain that audio and Wi-Fi provisioning would stay off on
-  that clock, and let the user decide.
+- *the stock application is not a build this port knows* (`libulanzi-bootstrap.so UNKNOWN BUILD`,
+  "does not define …") — a hard stop. `--allow-unverified` does not change it, and never run the
+  helper with `--force` by hand to get around it: without those entry points the knob-hold and
+  three-strikes fallbacks cannot bring the stock app back. Give the user the printed SHA-256 and
+  missing names to report in an issue, with the app and MCU versions from the stock web page.
+- *vendor files this port was not verified with* (`libmi_ao.so` or `libzknet.so` `UNKNOWN BUILD`)
+  — do not add `--allow-unverified` on your own: explain what the installer printed would stay off
+  (audio for libmi_ao; DHCP after the first lease, static addressing and the fallback access point
+  for libzknet), that the flag makes the helper run with `--force`, and that later updates must
+  then go through the installer, not the web UI. Let the user decide.
 - *preflight refused* — read the helper's message; it names the check that failed.
 - *application service is not running* — power-cycle the clock and start again.
 
@@ -135,7 +144,7 @@ the trial could not prove and the user should look at, and the path of `restore-
 this run — they need it to go back.
 
 Then record it. This project treats anything not run on a clock as unvalidated, so add a dated
-WORKLOG.md entry with the commit, what the trial and the install showed, and what was *not* checked.
+`docs/WORKLOG.md` entry with the commit, what the trial and the install showed, and what was *not* checked.
 A development install is not a `docs/VALIDATION.md` run: cold boots, knob-hold fallback,
 three-strikes fallback and restore-stock remain separate owner steps before tagging a release.
 Leave committing to the user unless asked.
@@ -146,16 +155,17 @@ Leave committing to the user unless asked.
 python3 .claude/skills/install-tc002-firmware/scripts/flash_dev_build.py CLOCK_IP --restore --yes
 ```
 
-This flashes the newest `~/.awtrix-ng-tc002/CLOCK_IP/*/restore-stock.img`. It is a write like any
-other and needs the same explicit request. Afterwards the stock app has no `/api/v1/version`; check
+This flashes the newest `~/.awtrix-ng-tc002/CLOCK_IP/*/restore-stock.img`, always with the helper's
+`--force` (the image is the clock's own stock partition). It is a write like any other and needs
+the same explicit request. Afterwards the stock app has no `/api/v1/version`; check
 the display, or `adb shell getprop init.svc.zkswe` (expect `running`).
 
 ## If the clock does not come back
 
 Do not flash again as a first reaction. First find out: the clock's IP (it may have changed — have
 the user check the router, and try `adb connect IP:5555`, which can answer when the web UI does
-not), how long ago the install was, and whether `--allow-unverified` was used (then Wi-Fi
-provisioning is off and the access point below may not appear). Several steps need hands on the
+not), how long ago the install was, and whether `--allow-unverified` was used and for which file (for
+`libzknet.so` there is no fallback access point, so the one below will not appear). Several steps need hands on the
 clock or a phone on its access point; those are the user's, so give them as instructions.
 
 1. **Right after an install: wait.** The Wi-Fi pixel (top-left) may pulse for 90 seconds after a

@@ -1,5 +1,5 @@
 {
-  "_comment": "SHA-256 of the Ulanzi firmware files this port calls into. Only files with a recorded hash are trusted at runtime and by the updater; run `uv run tools/vendor_fingerprints.py capture CLOCK_IP` on a supported clock to fill in the rootfs libraries, then rebuild.",
+  "_comment": "SHA-256 of the Ulanzi firmware files this port calls into. libmi_ao.so and libzknet.so are trusted only with a recorded hash: the port passes hand-measured structures to them. The vendor application is also accepted when its ELF dynamic symbol table defines every function in `symbols`; those are the FlyThings app entry points and the SDK's base::wifiOnAndWait(int), which is all the launcher calls. Never add `symbols` to another library. Run `uv run tools/vendor_fingerprints.py capture CLOCK_IP` on a supported clock to record hashes, then rebuild.",
   "stock": {
     "app": "1.1.1",
     "mcu": "V1.0.17"
@@ -7,21 +7,27 @@
   "libraries": {
     "libulanzi-bootstrap.so": {
       "path": "/res/lib/libulanzi-bootstrap.so",
-      "purpose": "the vendor application; the launcher calls its Wi-Fi initialisation and falls back to it",
+      "purpose": "the vendor application: the launcher starts Wi-Fi through it and falls back to it when the knob is held at power-on or AWTRIX fails to start three times",
+      "symbols": [
+        "onEasyUIInit",
+        "onEasyUIDeinit",
+        "onStartupApp",
+        "_ZN4base13wifiOnAndWaitEi"
+      ],
       "sha256": [
         "64d7dc6f7c06cc4f00164b28a52e73cf0b24678a2f3360e22b4ef757818bb7e1"
       ]
     },
     "libmi_ao.so": {
       "path": "/lib/libmi_ao.so",
-      "purpose": "Sigmastar audio output; the port passes hand-measured structures to it and must not run against another build",
+      "purpose": "Sigmastar audio output: the port passes hand-measured structures to it, so with another build audio (tones, MP3, radio) stays off",
       "sha256": [
         "b5509c610dbf61a01e2e2b6566796f17b5b95cb9696494257635351df8d0fc57"
       ]
     },
     "libzknet.so": {
       "path": "/lib/libzknet.so",
-      "purpose": "vendor network library; DHCP, static addressing and the fallback access point go through its C++ symbols",
+      "purpose": "vendor network library: DHCP after the launcher's first lease, static addressing and the fallback access point go through its C++ symbols, so with another build they stay off",
       "sha256": [
         "042af75d4213f08749aaf93112adcd0c22390fc1a1634795d751d7e9cf6edcb5"
       ]

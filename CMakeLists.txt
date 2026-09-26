@@ -34,6 +34,10 @@ if(NOT TC002_FINGERPRINT_RESULT EQUAL 0)
 endif()
 # The clock's panel geometry, applied through the build-time knobs the patch series adds upstream.
 set(TC002_PANEL AWTRIX_MATRIX_HEIGHT=16 AWTRIX_PANEL_WIDTH=52)
+# The shared Berry heap may grow to 1 MiB before new scripts are refused, instead of the ESP32's
+# 96 KB (issue #9). The clock has 12 to 15 MB available while AWTRIX runs, and the installer
+# stages about 4.5 MB in its RAM-backed /tmp, so this stays a fixed, modest share.
+set(TC002_SCRIPT_HEAP AWTRIX_SCRIPT_HEAP_BUDGET_BYTES=1048576)
 file(GLOB_RECURSE CORE CONFIGURE_DEPENDS ${U}/src/core/*.cpp ${U}/src/core/*.c)
 file(GLOB SIM CONFIGURE_DEPENDS ${U}/src/sim/*.cpp)
 list(FILTER SIM EXCLUDE REGEX "main_sim\\.cpp$")
@@ -50,13 +54,14 @@ add_executable(awtrix-tc002 ${CORE} ${SIM} ${TC002}
   ${U}/src/transport/mqtt/MqttLink.cpp ${U}/src/transport/mqtt/HaAnnouncer.cpp
   ${U}/src/transport/net/ArtnetService.cpp ${U}/src/transport/net/UdpSocket.cpp
   vendor/PubSubClient/src/PubSubClient.cpp src/updater/FirmwareImage.cpp)
-add_executable(tc002-update src/updater/FirmwareUpdate.cpp src/updater/FirmwareImage.cpp src/tc002/VendorLibrary.cpp)
+add_executable(tc002-update src/updater/FirmwareUpdate.cpp src/updater/FirmwareImage.cpp src/tc002/VendorLibrary.cpp
+  src/tc002/ElfSymbols.cpp)
 target_include_directories(tc002-update PRIVATE src/tc002 ${TC002_GENERATED})
 # src/tc002/compat comes before upstream's sim/compat so the clock's WiFi and socket shims win.
 target_include_directories(awtrix-tc002 PRIVATE src/tc002 src/tc002/compat src/updater src/loader ${TC002_GENERATED}
   ${U}/src ${U}/src/sim/compat vendor/base64/src vendor/PubSubClient/src)
-target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL}
-  AWTRIX_NG_VERSION="1.1.2-tc002.2" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
+target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL} ${TC002_SCRIPT_HEAP}
+  AWTRIX_NG_VERSION="1.1.2-tc002.3" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(awtrix-tc002 PRIVATE -Wall -Wextra -Wno-unused-parameter
   -ffunction-sections -fdata-sections)
 target_link_options(awtrix-tc002 PRIVATE -Wl,--gc-sections)
@@ -93,6 +98,32 @@ if(BUILD_TESTING)
   add_executable(test-vendor-application-path tests/vendor_application_path.cpp)
   target_include_directories(test-vendor-application-path PRIVATE src/updater)
   add_test(NAME tc002-vendor-application-path COMMAND test-vendor-application-path)
+  # Stand-ins for the vendor application, one per way an entry point can be present or absent.
+  set(TC002_ELF_FIXTURES)
+  foreach(variant full weak missing undefined data)
+    string(TOUPPER ${variant} VARIANT)
+    add_library(elf-fixture-${variant} SHARED tests/elf_fixture.cpp)
+    target_compile_definitions(elf-fixture-${variant} PRIVATE TC002_FIXTURE_${VARIANT})
+    set_target_properties(elf-fixture-${variant} PROPERTIES PREFIX "" OUTPUT_NAME vendor-app-${variant}
+      LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/elf-fixtures)
+    list(APPEND TC002_ELF_FIXTURES $<TARGET_FILE:elf-fixture-${variant}>)
+  endforeach()
+  add_executable(test-elf-symbols tests/elf_symbols_test.cpp src/tc002/ElfSymbols.cpp src/tc002/VendorLibrary.cpp)
+  target_include_directories(test-elf-symbols PRIVATE src/tc002 ${TC002_GENERATED})
+  target_link_libraries(test-elf-symbols PRIVATE ${CMAKE_DL_LIBS})
+  # The reader parses untrusted files inside the flash helper; fuzz it under the sanitizers when the
+  # compiler has them.
+  include(CheckCXXSourceCompiles)
+  set(CMAKE_REQUIRED_FLAGS -fsanitize=address,undefined)
+  set(CMAKE_REQUIRED_LINK_OPTIONS -fsanitize=address,undefined)
+  check_cxx_source_compiles("int main() { return 0; }" TC002_HAVE_SANITIZERS)
+  unset(CMAKE_REQUIRED_FLAGS)
+  unset(CMAKE_REQUIRED_LINK_OPTIONS)
+  if(TC002_HAVE_SANITIZERS)
+    target_compile_options(test-elf-symbols PRIVATE -fsanitize=address,undefined -fno-sanitize-recover=all)
+    target_link_options(test-elf-symbols PRIVATE -fsanitize=address,undefined)
+  endif()
+  add_test(NAME tc002-elf-symbols COMMAND test-elf-symbols ${TC002_ELF_FIXTURES})
   add_executable(test-loader tests/loader_test.c)
   target_include_directories(test-loader PRIVATE src/loader src/tc002)
   add_test(NAME tc002-loader COMMAND test-loader)

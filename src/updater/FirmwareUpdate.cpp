@@ -15,6 +15,7 @@
 #include <sys/reboot.h>
 #include <mtd/mtd-user.h>
 #include <string>
+#include <vector>
 #include <dirent.h>
 #include <signal.h>
 #include <sched.h>
@@ -50,22 +51,41 @@ static void stopBluetoothHelper() {
   }
   closedir(proc);
 }
-// The port was verified against one stock firmware. Refuse to replace anything else unless the
-// operator says --force: the vendor files AWTRIX keeps calling into would be unknown builds.
+// Refuse to replace a stock firmware the port does not recognise unless the operator says --force.
+// libmi_ao.so and libzknet.so need a recorded hash: AWTRIX passes hand-measured structures to them.
+// The vendor application may instead define every function the launcher calls into; without those
+// the knob-hold and three-strikes fallbacks could not bring the stock app back.
+static std::string joined(const std::vector<std::string>& names) {
+  std::string out;
+  for(const std::string& name:names) out+=(out.empty() ? "" : ", ")+name;
+  return out;
+}
 static bool stockFirmwareRecognised() {
   bool ok=true;
-  for(const tc002::VendorFingerprint* f=tc002::kVendorFingerprints;f->library;++f) {
+  for(const tc002::VendorFile* f=tc002::kVendorFiles;f->library;++f) {
     const std::string path = !std::strcmp(f->library,"libulanzi-bootstrap.so")
       ? tc002::vendorApplicationPath() : f->path;
-    if(tc002::vendorFileTrusted(f->library,path)) continue;
-    // Several hashes may be recorded for one library; any match above already returned.
-    bool matched=false;
-    for(const tc002::VendorFingerprint* g=tc002::kVendorFingerprints;g->library;++g)
-      if(!std::strcmp(g->library,f->library) && g!=f && tc002::vendorFileTrusted(g->library,path)) matched=true;
-    if(matched) continue;
-    std::fprintf(stderr,"Stock firmware check: %s at %s is not a build this port was verified against (expected stock app %s, MCU %s)\n",
-                 f->library,path.c_str(),tc002::kStockApp,tc002::kStockMcu);
-    ok=false;
+    const tc002::VendorCheck check=tc002::checkVendorFile(f->library,path);
+    const char* digest=check.sha256.empty() ? "unreadable" : check.sha256.c_str();
+    if(check.status==tc002::VendorStatus::Verified) {
+      if(check.required.empty())
+        std::printf("Stock firmware check: %s at %s verified\n",f->library,path.c_str());
+      else if(check.missing.empty())
+        std::printf("Stock firmware check: %s at %s verified; defines the launcher's %u entry points\n",
+                    f->library,path.c_str(),unsigned(check.required.size()));
+      else
+        std::printf("Stock firmware check: %s at %s verified (symbol check disagrees: %s)\n",
+                    f->library,path.c_str(),check.elfReadable ? joined(check.missing).c_str() : "not a readable ELF file");
+    } else if(check.status==tc002::VendorStatus::Compatible) {
+      std::printf("Stock firmware check: %s at %s is not a recorded build (sha256 %s) but defines every entry point the launcher uses\n",
+                  f->library,path.c_str(),digest);
+    } else {
+      const std::string detail=check.required.empty() ? ""
+        : check.elfReadable ? "; it does not define "+joined(check.missing) : "; not a readable ELF shared library";
+      std::fprintf(stderr,"Stock firmware check: %s at %s (sha256 %s) is not a build this port was verified against (stock app %s, MCU %s)%s\n",
+                   f->library,path.c_str(),digest,tc002::kStockApp,tc002::kStockMcu,detail.c_str());
+      ok=false;
+    }
   }
   return ok;
 }

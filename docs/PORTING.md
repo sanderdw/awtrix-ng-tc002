@@ -24,6 +24,8 @@ branded `build-webui/index.html`. Neither generated directory is committed.
 | 0006 script icon tiles | build-time macro | `AWTRIX_SCRIPT_ICON_W/H`, default 8x8 |
 | 0007 fixed hardware config | `AWTRIX_TC002` | refuse wiring/matrix changes with 422 |
 | 0008 fixed-matrix web UI | upstream candidate | UI follows `capabilities.matrix` |
+| 0009 rotary encoder over MQTT | upstream candidate | `IBoard::hasEncoder()` (default false): knob detents on `<prefix>/state/knob` and a Home Assistant event entity |
+| 0010 script heap budget | build-time macro | `AWTRIX_SCRIPT_HEAP_BUDGET_BYTES`, default 96 KB |
 
 Branding (title, repository link, TC002 help texts, licence footer) is not a patch: `tools/webui_brand.py`
 applies it with anchored replacements and fails the build if an anchor moved.

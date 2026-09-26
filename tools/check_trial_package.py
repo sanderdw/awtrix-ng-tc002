@@ -14,7 +14,8 @@ NOTICES = {
 }
 KINDS = {
     'awtrix-ng-tc002-trial': NOTICES | {
-        'bin/awtrix-tc002', 'try.py', 'upstream/awtrix-ng/webui/index.html', 'assets/cacert.pem'},
+        'bin/awtrix-tc002', 'try.py', 'paths.py', 'upstream/awtrix-ng/webui/index.html',
+        'assets/cacert.pem'},
     'awtrix-ng-tc002-installer': NOTICES | {
         'bin/awtrix-tc002', 'bin/tc002-update', 'bin/libzkgui.so', 'install.py', 'image.py',
         'vendor-fingerprints.json', 'webui/index.html', 'assets/cacert.pem'},
