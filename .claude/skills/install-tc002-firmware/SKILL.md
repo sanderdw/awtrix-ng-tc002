@@ -91,10 +91,9 @@ python3 .claude/skills/install-tc002-firmware/scripts/flash_dev_build.py CLOCK_I
 python3 .claude/skills/install-tc002-firmware/scripts/flash_dev_build.py CLOCK_IP --yes
 ```
 
-Why the wrapper: run from the repository, `tools/install.py` fails looking for
-`vendor-fingerprints.json` (it only exists in the packaged bundle), so the wrapper packages the
-bundle with `tools/package_installer.py` into a temporary directory and runs the installer from
-there. The installer's flash step uses a 120 s `adb shell` that can hang while the clock reboots
+Why the wrapper: it packages the bundle with `tools/package_installer.py` into a temporary
+directory and runs the installer from there, so the clock gets exactly what a release ZIP would
+install. The installer's flash step uses a 120 s `adb shell` that can hang while the clock reboots
 under it; the installer now tolerates that and keeps waiting for the clock, and the wrapper still
 keeps polling if an installer dies *after the write has started* instead of reporting failure. It uses `$ADB` or
 `build-deps/platform-tools/adb`; failing those, the installer looks on `PATH` and otherwise

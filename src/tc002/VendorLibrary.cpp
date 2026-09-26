@@ -113,7 +113,7 @@ void* openTrustedVendorLibrary(const char* library, int flags) {
 
 std::string vendorStatusJson() {
   std::lock_guard<std::mutex> lock(checkedMutex);
-  std::string out = std::string("{\"stock\":{\"app\":\"") + kStockApp + "\",\"mcu\":\"" + kStockMcu + "\"},\"libraries\":{";
+  std::string out = std::string("{\"reference\":{\"app\":\"") + kStockApp + "\",\"mcu\":\"" + kStockMcu + "\"},\"libraries\":{";
   bool first = true;
   const auto add = [&](const std::string& library, const char* expectedPath, const VendorCheck* c) {
     const std::vector<std::string> required = requiredFunctions(library);

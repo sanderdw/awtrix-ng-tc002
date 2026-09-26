@@ -31,12 +31,6 @@ install = load("tc002_install", ROOT / "tools/install.py")
 vendor_fingerprints = load("tc002_vendor_fingerprints", ROOT / "tools/vendor_fingerprints.py")
 
 
-@pytest.fixture(autouse=True)
-def repository_fingerprints(monkeypatch):
-    # install.py reads the copy bundled next to it; in the repository that is the source JSON.
-    monkeypatch.setattr(install, "fingerprints", lambda: json.loads(json.dumps(FINGERPRINTS)))
-
-
 def built(path):
     """A host build artifact; CI must have it, a local run without a build skips."""
     if not path.exists():
@@ -106,6 +100,11 @@ SYMBOL_KINDS = [dict(bind=WEAK), dict(bind=LOCAL), dict(section=0), dict(type=OB
 
 
 # --- JSON and generated header ------------------------------------------------------------------------
+
+def test_installer_reads_the_source_fingerprints_from_a_checkout():
+    assert not (ROOT / "tools/vendor-fingerprints.json").exists()
+    assert install.fingerprints() == FINGERPRINTS
+
 
 def test_only_the_vendor_application_may_pass_by_symbols():
     libraries = FINGERPRINTS["libraries"]

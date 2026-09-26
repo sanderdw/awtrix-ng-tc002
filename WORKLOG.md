@@ -766,3 +766,11 @@ every trial ZIP since 1.1.1-tc002.1 needed it copied in by hand. `check_trial_pa
 `try.py --help`, which exits in argparse before that import. The import now sits with the other
 imports, `package_trial.py` ships `paths.py`, and the checker requires it: a ZIP without it fails
 `try.py --help`.
+
+Two more from #6. `GET /api/v1/tc002/vendor` called the recorded reference build `stock`, which on
+a 1.0.1 / V1.0.16 clock read as a wrong detection; the key is now `reference`. The clock's own
+versions are not reported there: the MCU version stays inside `Tc002Hardware` and the stock app
+version is not read anywhere. And `tools/install.py` now falls back to
+`src/tc002/vendor-fingerprints.json` when no bundled copy sits next to it, like `bundle_paths()`
+does for the binaries, so it runs from a checkout; `test_vendor_gate.py` no longer patches that
+lookup out.

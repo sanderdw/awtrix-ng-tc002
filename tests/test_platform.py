@@ -185,7 +185,8 @@ def test_a_second_large_upload_is_refused_while_one_is_in_flight(app):
 
 def test_vendor_status_lists_the_files_the_port_depends_on(app):
     status = app('/api/v1/tc002/vendor')
-    assert status['stock'] == {'app': '1.1.1', 'mcu': 'V1.0.17'}
+    # The stock build the hashes were recorded from, not the clock's own version.
+    assert status['reference'] == {'app': '1.1.1', 'mcu': 'V1.0.17'} and 'stock' not in status
     assert set(status['libraries']) >= {'libulanzi-bootstrap.so', 'libmi_ao.so', 'libzknet.so'}
     # Without hardware nothing is loaded, so nothing can be trusted.
     assert not any(lib['trusted'] for lib in status['libraries'].values())

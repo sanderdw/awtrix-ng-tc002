@@ -150,7 +150,10 @@ def dump_partition(clock, out):
 
 
 def fingerprints():
-    return json.loads((HERE / "vendor-fingerprints.json").read_text())
+    """The recorded vendor hashes: bundled next to the installer, or the source JSON in the repository."""
+    bundled = HERE / "vendor-fingerprints.json"
+    path = bundled if bundled.exists() else HERE.parent / "src/tc002/vendor-fingerprints.json"
+    return json.loads(path.read_text())
 
 
 def elf_defined_functions(data):
