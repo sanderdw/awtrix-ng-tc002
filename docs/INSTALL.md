@@ -61,6 +61,15 @@ dump and `restore-stock.img`.
 
 ## Going back to stock
 
+Use the computer you installed this port from, connected to the same network as the clock.
+The restore command needs the `restore-stock.img` saved during installation under
+`~/.awtrix-ng-tc002/CLOCK_IP/DATE/`, so keep that backup on your computer.
+
+Replace `CLOCK_IP` below with your clock's current IP address. If its address has changed since
+installation, copy the backup directory `~/.awtrix-ng-tc002/OLD_IP/` to
+`~/.awtrix-ng-tc002/CURRENT_IP/`, preserving the dated subdirectories and their contents, before
+running the command. Use only the backup from this clock.
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/install.sh | sh -s -- CLOCK_IP --restore
 ```
@@ -68,6 +77,15 @@ curl -fsSL https://raw.githubusercontent.com/sanderdw/awtrix-ng-tc002/main/insta
 This flashes the `restore-stock.img` from your latest run through the same helper, with
 `--force`: the image is your clock's own stock partition, so the fingerprint check (which
 protects the port's calls into vendor code) does not apply.
+
+Type `flash` when prompted. Keep the clock on USB power and do not unplug it until it has rebooted.
+If AWTRIX will not start, hold the knob while powering on to start the stock Ulanzi app, then run
+the restore command. More recovery options are below under [If the clock does not come back](#if-the-clock-does-not-come-back).
+
+### Switching to official AWTRIX firmware
+
+After restoring stock, follow Blueforcer's installation instructions when the official TC002
+firmware is released. A link to those instructions will be added here when they are available.
 
 ## Updating from the web UI
 

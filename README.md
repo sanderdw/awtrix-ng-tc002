@@ -4,6 +4,18 @@ An unofficial, community-maintained port of **[AWTRIX NG](https://blueforcer.git
 to the Ulanzi TC002's **52 × 16** pixel clock. It runs the upstream apps, renderer, Berry scripting,
 HTTP API, MQTT interface and web UI natively on the clock.
 
+> [!NOTE]
+> **Official AWTRIX firmware for the TC002 is on its way from Blueforcer**, including work on the
+> underlying Linux system. This port started when no official support was planned, and I am happy
+> to see that change.
+>
+> **I will keep supporting this port until the official TC002 version is released.** Current users
+> can then [restore the stock application](docs/INSTALL.md#going-back-to-stock) and follow the
+> official installation instructions when available.
+>
+> Ulanzi featured this project on its website and in its newsletter, but I have never had contact
+> with them. Read my [full announcement](docs/ANNOUNCEMENT.md).
+
 ![TC002](docs/tc002.jpg)
 
 ## Install
