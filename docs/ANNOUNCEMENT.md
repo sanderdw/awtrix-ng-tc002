@@ -8,7 +8,7 @@ I am happy he has decided to support the TC002 himself, including the underlying
 
 Also keep an eye on [Stipple](https://galadril.github.io/Stipple/), another project that looks really interesting. I hope to see more projects making use of the TC002’s hardware and opening it up for the community.
 
-Ulanzi has also featured this project on its [TC002 product page](announcement/ulanzi-productpage.png) and in its [newsletter](announcement/ulanzi-newsletter.png). I have never had any contact with Ulanzi, and it came as a surprise to see the project featured there. I was happy to see the project recognized and shared with other TC002 owners.
+Ulanzi has also featured this project on its [TC002 product page](announcement/ulanzi-productpage.png) and in its [newsletter](announcement/ulanzi-newsletter.png). I have never had any contact with Ulanzi, and it came as a surprise to see the project featured there. I was happy to see the project recognized and shared with other TC002 owners. They even got my name wrong in the newsletter :).
 
 **If you already use this port, I will keep supporting it until Blueforcer releases the official TC002 version.** Please continue to use this repository’s [issues](https://github.com/sanderdw/awtrix-ng-tc002/issues) for questions and bug reports about the port. Once the official version is available, I will point users to it.
 
