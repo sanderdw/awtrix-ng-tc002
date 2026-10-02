@@ -16,6 +16,7 @@
 #include "FirmwareImage.h"
 #include "Tc002Board.h"
 #include "Tc002Hardware.h"
+#include "Tc002Mp3Probe.h"
 #include "Tc002System.h"
 #include "VendorLibrary.h"
 #include "core/AssetPaths.h"
@@ -235,6 +236,13 @@ void handleMp3Upload(SimHttpServer& server, const DeviceConfig& cfg, const httpl
   if (status) {
     if (!temp.empty()) unlink(temp.c_str());
     sendError(res, status, code, message);
+    return;
+  }
+  // The first bytes only show it is MPEG audio; refuse what the decoder would fail on later.
+  const std::string problem = tc002::probeMp3(temp).problem;
+  if (!problem.empty()) {
+    unlink(temp.c_str());
+    sendError(res, 415, "unsupportedMediaType", problem.c_str());
     return;
   }
   if (std::rename(temp.c_str(), target.c_str()) != 0) {

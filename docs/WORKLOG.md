@@ -746,3 +746,45 @@ version is not read anywhere. And `tools/install.py` now falls back to
 `src/tc002/vendor-fingerprints.json` when no bundled copy sits next to it, like `bundle_paths()`
 does for the binaries, so it runs from a checkout; `test_vendor_gate.py` no longer patches that
 lookup out.
+
+## 2026-10-02: script Content-Type sent once (#11); MP3 format probe (#12)
+
+Working tree on 1.1.2-tc002.3 (6cd6a12), not yet committed or installed.
+
+**#11.** `Tc002ScriptHttp` copied the script's headers and then called httplib's `set_header`
+for `Content-Type`, which appends, so a script's own `Content-Type` went out twice and
+`accounts.spotify.com` answered 400. `requestHeaders()` now adds `application/octet-stream` only
+when the script set no `Content-Type` (any case) and the request has a body; a GET carries none.
+Upstream's simulator `SimScriptHttp` has the same duplicate through `cli.Post(..., type)`; it is
+not part of the TC002 binary.
+
+**#12.** Reproduced on 192.168.100.190 (installed 1.1.2-tc002.3, volume 0): a 44.1 kHz MPEG-1
+file played; a 22.05 kHz MPEG-2 file and a 44.1 kHz MPEG-1 file with 200 KB of ID3v2 cover art
+both uploaded and then failed with "MP3 decoding failed". The shared decoder plays MPEG-1 Layer III
+only and gives up after 128 KB without a frame. The new `probeMp3()` skips the ID3v2 tag and
+classifies the first confirmed frame. The upload route refuses non-playable files with 415 and the
+reason. Playback seeks past the tag, so cover art plays, and names the reason when it cannot.
+"Device not reachable" did not reproduce: a 4-minute stereo MP3 played with the API answering
+in under 0.1 s. Three parallel Range downloads of a 3.8 MB file (as the browser preview does)
+stalled one API call for 3.9 s, under the web UI's 12 s timeout. That path reads the whole file on
+the main loop (upstream `SimHttpServer`), so an 8 MiB file may get there; left open.
+
+RAM trial, 180 s: MPEG-2 and MP2 uploads refused with the reason; the MPEG-1 and cover-art files
+played to the end with no error. A Berry script's POST reached a LAN echo server with one
+`Content-Type`, a body without one carried `application/octet-stream`, and a GET carried none;
+all three answered 200. The installed firmware was back afterwards. Not checked: audible output,
+since everything played at volume 0, and an install to flash.
+
+## 2026-10-02: 1.1.2-tc002.4 installed on 192.168.100.190
+
+Working tree on 6cd6a12, uncommitted, with the #11 and #12 changes above. RAM trial, 90 s: version
+1.1.2-tc002.4, 52 × 16 matrix, audio capabilities on, `updateImage` empty, no crash in the log,
+installed 1.1.2-tc002.3 back at the end. Install with the skill's wrapper: all three vendor files
+**verified**, helper preflight passed, write started 06:19. The clock did not answer within the
+installer's five minutes. At 06:27 it answered neither ping, HTTP nor adb, and was on no other
+address in the subnet. At 07:46 it answered on its own address with 1.1.2-tc002.4, 42 FPS,
+`updateImage` empty, apps, radio station and settings intact. When it actually came back is not
+known: nothing polled between 06:28 and 07:46, and whether the owner power-cycled it is not known.
+The earlier installs came back in one to two minutes, so a slow return after the write is worth
+watching on the next install. Not checked: audible MP3 output, cold boot, knob-hold and
+three-strikes fallbacks.

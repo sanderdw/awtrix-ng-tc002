@@ -73,6 +73,8 @@ it does not recognise, please report it in an [issue](https://github.com/sanderd
 - `draw` commands and Berry scripts use physical pixels: `(51,15)` is the bottom-right LED. Scripts
   written for 32 × 8 need their coordinates updated; use `width()` and `height()`.
 - Berry scripts share a 1 MiB heap, room for many more scripts than on an ESP32.
+- MP3s play when they are MPEG-1 Layer III at 32, 44.1 or 48 kHz, as on the ESP32. Other files,
+  such as 22 or 24 kHz MPEG-2, are refused at upload with the reason. Embedded cover art is fine.
 
 **Hardware differences**
 

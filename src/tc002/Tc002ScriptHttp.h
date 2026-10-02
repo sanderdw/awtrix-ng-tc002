@@ -1,7 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <cctype>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -71,18 +70,13 @@ class Tc002ScriptHttp : public script::IScriptHttp {
       cli.set_read_timeout(10, 0);
       cli.set_follow_location(true);
 
-      httplib::Headers headers;
-      for (const auto& h : req.headers) headers.emplace(h.first, h.second);
-      const std::string type = contentType(req.headers);
-
       script::HttpBodyFilter filter;
       filter.begin(req.find, req.keep, script::httpBodyCap(maxBytes));
       httplib::Request request;
       request.method = req.method.empty() ? "GET" : req.method;
       request.path = target;
-      request.headers = headers;
+      request.headers = requestHeaders(req.headers, req.body);
       request.body = req.body;
-      request.set_header("Content-Type", type);
       request.response_handler = [&](const httplib::Response& response) {
         r.status = response.status;
         return true;
@@ -102,18 +96,19 @@ class Tc002ScriptHttp : public script::IScriptHttp {
     return true;
   }
 
+  // The script's headers as sent. httplib's set_header appends, so a default Content-Type is only
+  // added when the script set none (any case) and there is a body to describe (issue #11).
+  static httplib::Headers requestHeaders(const script::HttpHeaders& scriptHeaders,
+                                         const std::string& body) {
+    httplib::Headers headers;
+    for (const auto& h : scriptHeaders) headers.emplace(h.first, h.second);
+    if (!body.empty() && headers.find("Content-Type") == headers.end())
+      headers.emplace("Content-Type", "application/octet-stream");
+    return headers;
+  }
+
  private:
   static constexpr unsigned kMaxPending = 8;
-
-  static std::string contentType(const script::HttpHeaders& headers) {
-    for (const auto& h : headers) {
-      if (h.first.size() != 12) continue;
-      std::string lower;
-      for (const char c : h.first) lower.push_back(static_cast<char>(std::tolower(c)));
-      if (lower == "content-type") return h.second;
-    }
-    return "application/octet-stream";
-  }
 
   // Split HTTP(S) into the origin and request target accepted by httplib.
   static bool split(const std::string& url, std::string& origin, std::string& target) {
