@@ -61,7 +61,7 @@ target_include_directories(tc002-update PRIVATE src/tc002 ${TC002_GENERATED})
 target_include_directories(awtrix-tc002 PRIVATE src/tc002 src/tc002/compat src/updater src/loader ${TC002_GENERATED}
   ${U}/src ${U}/src/sim/compat vendor/base64/src vendor/PubSubClient/src)
 target_compile_definitions(awtrix-tc002 PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL} ${TC002_SCRIPT_HEAP}
-  AWTRIX_NG_VERSION="1.1.2-tc002.3" CPPHTTPLIB_THREAD_POOL_COUNT=2 CPPHTTPLIB_OPENSSL_SUPPORT)
+  AWTRIX_NG_VERSION="1.1.2-tc002.4" CPPHTTPLIB_THREAD_POOL_COUNT=4 CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(awtrix-tc002 PRIVATE -Wall -Wextra -Wno-unused-parameter
   -ffunction-sections -fdata-sections)
 target_link_options(awtrix-tc002 PRIVATE -Wl,--gc-sections)
@@ -145,4 +145,13 @@ if(BUILD_TESTING)
   target_include_directories(test-tc002 PRIVATE src/tc002 ${U}/src)
   target_link_libraries(test-tc002 PRIVATE ${CMAKE_DL_LIBS})
   add_test(NAME tc002-hardware COMMAND test-tc002)
+  add_executable(test-mp3-probe tests/mp3_probe_test.cpp src/tc002/Tc002Mp3Probe.cpp ${U}/src/core/audio/Mp3Frame.cpp)
+  target_include_directories(test-mp3-probe PRIVATE src/tc002 ${U}/src)
+  add_test(NAME tc002-mp3-probe COMMAND test-mp3-probe ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures)
+  add_executable(test-script-http tests/script_http_test.cpp)
+  target_include_directories(test-script-http PRIVATE src/tc002 src/tc002/compat ${U}/src ${U}/src/sim/compat)
+  target_compile_definitions(test-script-http PRIVATE AWTRIX_NATIVE AWTRIX_SIM AWTRIX_TC002 ${TC002_PANEL}
+    CPPHTTPLIB_OPENSSL_SUPPORT)
+  target_link_libraries(test-script-http PRIVATE OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+  add_test(NAME tc002-script-http COMMAND test-script-http)
 endif()

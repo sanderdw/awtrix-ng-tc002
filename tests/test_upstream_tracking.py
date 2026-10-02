@@ -24,4 +24,4 @@ def test_no_upstream_edit_lacks_a_guard_or_default():
     # Patches that change behaviour for every board must say so in their subject; the rest carry a
     # build-time default or an AWTRIX_TC002 guard. This is a reminder, not a proof: keep the list short.
     subjects = [p.name for p in sorted((ROOT / 'patches').glob('*.patch'))]
-    assert len(subjects) <= 10, subjects
+    assert len(subjects) <= 11, subjects

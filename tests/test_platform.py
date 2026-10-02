@@ -11,6 +11,8 @@ import sys
 import pytest
 
 ROOT=Path(__file__).parents[1]
+FIXTURES=ROOT/'tests'/'fixtures'
+MPEG1=(FIXTURES/'mp3-mpeg1.mp3').read_bytes()
 sys.path.insert(0,str(ROOT/'tools'))
 from paths import webui
 
@@ -75,7 +77,7 @@ def test_audio_mp3_routes(app):
     assert app('/api/v1/audio')['stations'] == []
     assert app('/api/v1/audio/melodies')['melodies'] == []
     assert app('/api/v1/audio/mp3')['files'] == []
-    content = b'ID3' + bytes(20)
+    content = MPEG1
     assert upload_mp3(app, 'door-bell_1.mp3', content, '?dir=/ICONS')['ok']
     listing = app('/api/v1/audio/mp3?dir=/ICONS')
     assert listing['files'] == [{'name': 'door-bell_1.mp3', 'size': len(content)}]
@@ -96,11 +98,24 @@ def test_audio_mp3_routes(app):
     ('/ICONS/escape.mp3', b'ID3test', 400),
     ('tone.wav', b'ID3test', 400),
     ('tone.mp3', b'not audio', 415),
+    ('tone.mp3', b'ID3' + bytes(20), 415),
 ])
 def test_audio_rejects_invalid_uploads(app, name, content, status):
     with pytest.raises(urllib.error.HTTPError) as error:
         upload_mp3(app, name, content)
     assert error.value.code == status
+    assert app('/api/v1/audio/mp3')['files'] == []
+
+# Issue #12: the decoder plays MPEG-1 Layer III only, so other MPEG audio is refused with the reason.
+@pytest.mark.parametrize('fixture,reason', [
+    ('mp3-mpeg2.mp3', 'MPEG-2 audio at 22050 Hz is not supported'),
+    ('mp3-layer2.mp3', 'MPEG Layer I/II audio (MP1/MP2) is not supported'),
+])
+def test_audio_rejects_unplayable_mp3(app, fixture, reason):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        upload_mp3(app, 'tone.mp3', (FIXTURES / fixture).read_bytes())
+    assert error.value.code == 415
+    assert reason in json.load(error.value)['error']['message']
     assert app('/api/v1/audio/mp3')['files'] == []
 
 @pytest.mark.parametrize('path,method,status', [
@@ -157,7 +172,7 @@ def test_oversized_bodies_are_rejected_before_they_are_read(app):
 
 def test_large_mp3_upload_streams_to_disk_within_memory_budget(app):
     import os
-    content = b'ID3' + os.urandom(6 * 1024 * 1024)
+    content = MPEG1 + os.urandom(6 * 1024 * 1024)
     before = rss_kib(app.pid)
     assert upload_mp3(app, 'long-track.mp3', content)['ok']
     after = rss_kib(app.pid)
@@ -169,7 +184,7 @@ def test_a_second_large_upload_is_refused_while_one_is_in_flight(app):
     import threading
     boundary = 'awtrix-slow-upload'
     body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="slow.mp3"\r\n'
-            f'Content-Type: audio/mpeg\r\n\r\n').encode() + b'ID3' + bytes(300000) + f'\r\n--{boundary}--\r\n'.encode()
+            f'Content-Type: audio/mpeg\r\n\r\n').encode() + MPEG1 + bytes(300000) + f'\r\n--{boundary}--\r\n'.encode()
     head = (f'POST /api/v1/audio/mp3 HTTP/1.1\r\nHost: clock\r\nContent-Type: multipart/form-data; boundary={boundary}\r\n'
             f'Content-Length: {len(body)}\r\n\r\n').encode()
     with socket.create_connection(('127.0.0.1', app.port), timeout=10) as slow:
@@ -181,6 +196,33 @@ def test_a_second_large_upload_is_refused_while_one_is_in_flight(app):
         slow.sendall(body[2000:])
         assert int(slow.recv(4096).split(b' ')[1]) == 200
     assert {f['name'] for f in app('/api/v1/audio/mp3')['files']} == {'slow.mp3'}
+
+
+def test_idle_browser_connections_do_not_starve_requests(app):
+    # A browser keeps several keep-alive connections open, and each idle one holds a server worker
+    # until the keep-alive timeout. During an MP3 upload the web UI's requests queued behind them
+    # in 5 s steps until one passed its 12 s timeout: "Device not reachable".
+    boundary = 'awtrix-slow-upload'
+    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="slow.mp3"\r\n'
+            f'Content-Type: audio/mpeg\r\n\r\n').encode() + MPEG1 + bytes(300000) + f'\r\n--{boundary}--\r\n'.encode()
+    head = (f'POST /api/v1/audio/mp3 HTTP/1.1\r\nHost: clock\r\nContent-Type: multipart/form-data; boundary={boundary}\r\n'
+            f'Content-Length: {len(body)}\r\n\r\n').encode()
+    idle = []
+    with socket.create_connection(('127.0.0.1', app.port), timeout=10) as upload:
+        upload.sendall(head + body[:2000])   # an upload in progress holds one worker
+        time.sleep(0.2)
+        for _ in range(2):                    # the page's earlier requests, now idle
+            s = socket.create_connection(('127.0.0.1', app.port), timeout=10)
+            s.sendall(b'GET /api/v1/version HTTP/1.1\r\nHost: clock\r\n\r\n')
+            assert b' 200 ' in s.recv(4096)
+            idle.append(s)
+        start = time.time()
+        assert app('/api/v1/version')['version']
+        assert time.time() - start < 2, f'request waited {time.time() - start:.1f} s for a worker'
+        upload.sendall(body[2000:])
+        assert int(upload.recv(4096).split(b' ')[1]) == 200
+    for s in idle:
+        s.close()
 
 
 def test_vendor_status_lists_the_files_the_port_depends_on(app):

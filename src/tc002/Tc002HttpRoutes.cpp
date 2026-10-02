@@ -16,6 +16,7 @@
 #include "FirmwareImage.h"
 #include "Tc002Board.h"
 #include "Tc002Hardware.h"
+#include "Tc002Mp3Probe.h"
 #include "Tc002System.h"
 #include "VendorLibrary.h"
 #include "core/AssetPaths.h"
@@ -237,6 +238,13 @@ void handleMp3Upload(SimHttpServer& server, const DeviceConfig& cfg, const httpl
     sendError(res, status, code, message);
     return;
   }
+  // The first bytes only show it is MPEG audio; refuse what the decoder would fail on later.
+  const std::string problem = tc002::probeMp3(temp).problem;
+  if (!problem.empty()) {
+    unlink(temp.c_str());
+    sendError(res, 415, "unsupportedMediaType", problem.c_str());
+    return;
+  }
   if (std::rename(temp.c_str(), target.c_str()) != 0) {
     unlink(temp.c_str());
     sendError(res, 507, "insufficientStorage", "could not store the file");
@@ -393,9 +401,11 @@ SimHttpExtension tc002HttpExtension(SimHttpServer& server, Tc002Board& board, De
       }
       return httplib::Server::HandlerResponse::Unhandled;
     });
-    // Two worker threads serve the clock; idle keep-alive connections must not hold them.
+    // Four worker threads serve the clock, and httplib keeps one on each connection until its
+    // keep-alive timeout. A browser holds several connections open, so with an MP3 upload taking
+    // one worker, a 5 s idle hold queued the web UI's requests past their 12 s timeout.
     svr.set_keep_alive_max_count(20);
-    svr.set_keep_alive_timeout(5);
+    svr.set_keep_alive_timeout(1);
     svr.set_read_timeout(5, 0);
     svr.set_write_timeout(10, 0);
     svr.Post("/api/v1/audio/mp3", [&server, &cfg](const httplib::Request& req, httplib::Response& res,

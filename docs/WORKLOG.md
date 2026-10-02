@@ -746,3 +746,99 @@ version is not read anywhere. And `tools/install.py` now falls back to
 `src/tc002/vendor-fingerprints.json` when no bundled copy sits next to it, like `bundle_paths()`
 does for the binaries, so it runs from a checkout; `test_vendor_gate.py` no longer patches that
 lookup out.
+
+## 2026-10-02: script Content-Type sent once (#11); MP3 format probe (#12)
+
+Working tree on 1.1.2-tc002.3 (6cd6a12), not yet committed or installed.
+
+**#11.** `Tc002ScriptHttp` copied the script's headers and then called httplib's `set_header`
+for `Content-Type`, which appends, so a script's own `Content-Type` went out twice and
+`accounts.spotify.com` answered 400. `requestHeaders()` now adds `application/octet-stream` only
+when the script set no `Content-Type` (any case) and the request has a body; a GET carries none.
+Upstream's simulator `SimScriptHttp` has the same duplicate through `cli.Post(..., type)`; it is
+not part of the TC002 binary.
+
+**#12.** Reproduced on 192.168.100.190 (installed 1.1.2-tc002.3, volume 0): a 44.1 kHz MPEG-1
+file played; a 22.05 kHz MPEG-2 file and a 44.1 kHz MPEG-1 file with 200 KB of ID3v2 cover art
+both uploaded and then failed with "MP3 decoding failed". The shared decoder plays MPEG-1 Layer III
+only and gives up after 128 KB without a frame. The new `probeMp3()` skips the ID3v2 tag and
+classifies the first confirmed frame. The upload route refuses non-playable files with 415 and the
+reason. Playback seeks past the tag, so cover art plays, and names the reason when it cannot.
+"Device not reachable" did not reproduce: a 4-minute stereo MP3 played with the API answering
+in under 0.1 s. Three parallel Range downloads of a 3.8 MB file (as the browser preview does)
+stalled one API call for 3.9 s, under the web UI's 12 s timeout. That path reads the whole file on
+the main loop (upstream `SimHttpServer`), so an 8 MiB file may get there; left open.
+
+RAM trial, 180 s: MPEG-2 and MP2 uploads refused with the reason; the MPEG-1 and cover-art files
+played to the end with no error. A Berry script's POST reached a LAN echo server with one
+`Content-Type`, a body without one carried `application/octet-stream`, and a GET carried none;
+all three answered 200. The installed firmware was back afterwards. Not checked: audible output,
+since everything played at volume 0, and an install to flash.
+
+## 2026-10-02: 1.1.2-tc002.4 installed on 192.168.100.190
+
+Working tree on 6cd6a12, uncommitted, with the #11 and #12 changes above. RAM trial, 90 s: version
+1.1.2-tc002.4, 52 × 16 matrix, audio capabilities on, `updateImage` empty, no crash in the log,
+installed 1.1.2-tc002.3 back at the end. Install with the skill's wrapper: all three vendor files
+**verified**, helper preflight passed, write started 06:19. The clock did not answer within the
+installer's five minutes. At 06:27 it answered neither ping, HTTP nor adb, and was on no other
+address in the subnet. At 07:46 it answered on its own address with 1.1.2-tc002.4, 42 FPS,
+`updateImage` empty, apps, radio station and settings intact. When it actually came back is not
+known: nothing polled between 06:28 and 07:46, and whether the owner power-cycled it is not known.
+The earlier installs came back in one to two minutes, so a slow return after the write is worth
+watching on the next install. Not checked: audible MP3 output, cold boot, knob-hold and
+three-strikes fallbacks.
+
+## 2026-10-02: MP3 upload names; workers held by idle keep-alive connections
+
+On 1.1.2-tc002.4 (85b82c2), on 192.168.100.190.
+
+**Upload names.** Every song name in the owner's library (`Alyssa Reid - High.mp3`, 571 of 571
+in one folder) fails `uploadNameOk`. `handleMp3Upload` refuses after the first multipart part, before
+reading the body, and the owner's browser reported that as a network error: *Device not
+reachable*. Patch 0011 renames MP3s in the upload zone (`Alyssa_Reid_-_High.mp3`, at most 32
+characters), checks the free space first and shows the device's error text. Checked in Chrome
+against the host build with the owner's files: renamed, shortened, and a third song refused with
+*Not enough free space*. `test_upstream_tracking.py` now allows 11 patches.
+Renaming maps several names to one (`a b.mp3` and `a_b.mp3`; every non-Latin title becomes
+`track.mp3`), and the device replaces an existing file, so a review on PR #13 found a second song
+could silently replace the first. A renamed upload whose name is taken now gets `_2`, `_3`, …
+(stem still at most 32); an upload whose name was already valid still replaces, as elsewhere. Checked
+in Chrome against the host build: `a_b.mp3`, `a b.mp3`, `a_b.mp3` leave `a_b.mp3` and `a_b_2.mp3`.
+
+**Workers held by idle connections.** With 0011 flashed, an upload still showed the toast,
+although the file arrived whole (3,997,847 B, logged 14 s after boot). Reproduced in Chrome on the
+installed build, with fetch and XHR instrumented: requests took 5038, 5058 and 10057 ms, and
+`/api/v1/capabilities` was aborted at 12 s, all multiples of `set_keep_alive_timeout(5)`. httplib
+0.20 keeps a worker on a connection while `keep_alive()` waits for its next request, and
+`CPPHTTPLIB_THREAD_POOL_COUNT=2`, so one upload plus one idle browser connection queued everything
+else. Now four workers and a 1 s keep-alive. The new
+`test_idle_browser_connections_do_not_starve_requests` (an upload in progress, two idle
+connections, then one request under 2 s) fails on the old settings and passes. RAM trial: a
+throttled 13.6 s upload while the Audio page reloaded and changed views: 31 requests, the slowest
+1045 ms, no toast.
+
+**Trial left the clock dark.** At the end of that trial, `tools/trial.py`'s
+`setprop ctl.start zkswe` failed: `adb shell` answered `error: closed` to every command, although
+`adb connect` succeeded and the clock answered ping. Nothing was listening on port 80 and the
+panel was black. One power cycle by the owner brought 1.1.2-tc002.4 back with settings intact.
+Cause not found. The trial's own `trap 'setprop ctl.start zkswe' EXIT` did not restart the
+service either. `trial.py` could retry the restart and say plainly that a power cycle is needed
+when it cannot.
+
+## 2026-10-02: MP3 upload-name collisions fixed and installed on 192.168.100.190
+
+Commit 192f4e7, version still 1.1.2-tc002.4 (the build is told apart by `prepareMp3` in the served
+web UI, not by version). Stock app 1.1.1, MCU V1.0.17.
+
+- RAM trial, 120 s: `capabilities` showed the fixed 52 × 16 matrix, `mp3` and `buzzer`. On the real
+  Audio page, uploading `webui-check_a_b.mp3`, `webui-check a b.mp3`, `webui-check_a_b.mp3` left
+  `webui-check_a_b.mp3` and `webui-check_a_b_2.mp3`, with no JavaScript errors. No crash in the trial
+  log. This time the trial restored the installed service by itself.
+- Install: all three vendor files verified, preflight passed, and the clock came back by itself
+  reporting 1.1.2-tc002.4, serving `prepareMp3`, `fps` 40, `updateImage` "". Settings were
+  byte-identical. The pushed `temperature` app kept its slot but was not present until its sender
+  pushes it again (pushed apps are not persisted). `restore-stock.img` is under
+  `~/.awtrix-ng-tc002/192.168.100.190/20261002-160207/`.
+- Not checked: the panel and buzzer by eye, a cold boot, choosing several files at once in the
+  upload picker (only the first uploads: upstream clears the live `FileList` while the loop awaits).

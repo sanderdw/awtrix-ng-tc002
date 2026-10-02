@@ -8444,7 +8444,7 @@
   }
  },
  "version": {
-  "version": "1.1.2-tc002.3"
+  "version": "1.1.2-tc002.4"
  },
  "device": {
   "boardType": "tc002",
@@ -8543,5 +8543,5 @@
   "pinI2sMclk": -1,
   "pinAmpEnable": -1
  },
- "webuiSha256": "b451849e98ba9c4017432307c0f6e3cceda2429a1928524ccf6f7a553f609842"
+ "webuiSha256": "20db84121e4a572bcc01305b79816d47d039b80a6b3a596dd14d5787800cc87d"
 }

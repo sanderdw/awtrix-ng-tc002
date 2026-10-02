@@ -73,6 +73,8 @@ it does not recognise, please report it in an [issue](https://github.com/sanderd
 - `draw` commands and Berry scripts use physical pixels: `(51,15)` is the bottom-right LED. Scripts
   written for 32 × 8 need their coordinates updated; use `width()` and `height()`.
 - Berry scripts share a 1 MiB heap, room for many more scripts than on an ESP32.
+- MP3s play when they are MPEG-1 Layer III at 32, 44.1 or 48 kHz, as on the ESP32. Other files,
+  such as 22 or 24 kHz MPEG-2, are refused at upload with the reason. Embedded cover art is fine.
 
 **Hardware differences**
 
@@ -113,8 +115,8 @@ Turn on block buttons (`blockNavigation`) if the knob should stop switching apps
 
 - **Installing rewrites the clock's application partition in place**; there is no second copy.
   The images are validated and every written block is read back, but a power cut during the write
-  leaves a clock that needs recovery through the stock bootloader or a serial console, which has
-  never been tried.
+  leaves a clock that needs [Ulanzi's USB recovery](docs/INSTALL.md#ulanzis-usb-recovery) or a
+  serial console; neither has been tried with this port.
 - **Recovery without a computer**: hold the knob at power-on, or let three start-up crashes in a
   row happen; both start the stock Ulanzi app, from which `--restore` works.
 - **Releases are pre-releases** until the [validation protocol](docs/VALIDATION.md) has been run

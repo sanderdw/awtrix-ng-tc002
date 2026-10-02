@@ -1,5 +1,6 @@
 #include "Tc002Audio.h"
 #include "Tc002Hardware.h"
+#include "Tc002Mp3Probe.h"
 #include "VendorLibrary.h"
 #include "core/audio/Mp3FileDecoder.h"
 #include "core/radio/IcyStream.h"
@@ -150,6 +151,10 @@ bool Audio::playMp3(const std::string& path) {
   launch(Mp3,[this,host] {
     std::unique_ptr<FILE,decltype(&std::fclose)> file(std::fopen(host.c_str(),"rb"),std::fclose);
     if(!file) { fail("MP3 file could not be opened"); return; }
+    // Skip the ID3v2 tag here: cover art past the decoder's 128 KB scan would fail every frame.
+    const auto probe=probeMp3(host);
+    if(!probe.problem.empty()) { fail("MP3 not playable: "+probe.problem); return; }
+    std::fseek(file.get(),probe.audioOffset,SEEK_SET);
     auto decoder=std::make_unique<mp3::Decoder>();
     mp3::Mp3FileDecoder reader(*decoder);
     std::array<int16_t,mp3::kMaxPcmPerFrame> pcm{};
