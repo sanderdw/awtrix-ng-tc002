@@ -800,6 +800,11 @@ reachable*. Patch 0011 renames MP3s in the upload zone (`Alyssa_Reid_-_High.mp3`
 characters), checks the free space first and shows the device's error text. Checked in Chrome
 against the host build with the owner's files: renamed, shortened, and a third song refused with
 *Not enough free space*. `test_upstream_tracking.py` now allows 11 patches.
+Renaming maps several names to one (`a b.mp3` and `a_b.mp3`; every non-Latin title becomes
+`track.mp3`), and the device replaces an existing file, so a review on PR #13 found a second song
+could silently replace the first. A renamed upload whose name is taken now gets `_2`, `_3`, …
+(stem still at most 32); an upload whose name was already valid still replaces, as elsewhere. Checked
+in Chrome against the host build: `a_b.mp3`, `a b.mp3`, `a_b.mp3` leave `a_b.mp3` and `a_b_2.mp3`.
 
 **Workers held by idle connections.** With 0011 flashed, an upload still showed the toast,
 although the file arrived whole (3,997,847 B, logged 14 s after boot). Reproduced in Chrome on the

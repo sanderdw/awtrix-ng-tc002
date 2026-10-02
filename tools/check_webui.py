@@ -40,7 +40,20 @@ with sync_playwright() as pw:
         page.goto(a.url+'/#/audio', wait_until='domcontentloaded')
     assert mp3.value.status == 200
     assert isinstance(mp3.value.json()['files'], list)
-    page.locator('input[type=file][accept=".mp3,audio/mpeg"]').wait_for(state='attached')
+    mp3_in = page.locator('input[type=file][accept=".mp3,audio/mpeg"]')
+    mp3_in.wait_for(state='attached')
+    # A renamed upload must not replace a different song; a valid name still replaces its own file.
+    tone = (Path(__file__).resolve().parents[1]/'tests/fixtures/mp3-mpeg1.mp3').read_bytes()
+    mp3_names = lambda: {f['name'] for f in page.request.get(a.url+'/api/v1/audio/mp3').json()['files']}
+    before = mp3_names()
+    for n in ('webui-check_a_b.mp3', 'webui-check a b.mp3', 'webui-check_a_b.mp3'):
+        with page.expect_response(lambda r: r.request.method == 'POST' and '/api/v1/audio/mp3' in r.url) as up:
+            mp3_in.set_input_files({'name': n, 'mimeType': 'audio/mpeg', 'buffer': tone})
+        assert up.value.status == 200, (n, up.value.text())
+    added = mp3_names() - before
+    for n in added:
+        page.request.delete(a.url+'/api/v1/audio/mp3/'+n.removesuffix('.mp3'))
+    assert added == {'webui-check_a_b.mp3', 'webui-check_a_b_2.mp3'}, added
     assert not errors, errors
     print("Web UI loads without JavaScript errors; preview is 52 × 16 pixels.")
     browser.close()

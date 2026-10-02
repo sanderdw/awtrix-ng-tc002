@@ -10,9 +10,11 @@ answers before reading the body, which a browser still sending reports as a
 dropped connection: the upload showed "Device not reachable". The upload
 zone now renames MP3s to a valid name, checks the free space first, and any
 refused upload shows the device's error message instead of the HTTP status.
+The device replaces a file of the same name, so a renamed upload whose name
+is taken gets a _2, _3, ... suffix rather than replacing a different song.
 
 diff --git a/webui/index.html b/webui/index.html
-index c2fd9f8..c90bfb6 100644
+index c2fd9f8..805c59a 100644
 --- a/webui/index.html
 +++ b/webui/index.html
 @@ -930,7 +930,7 @@ const I18N={en:{
@@ -33,17 +35,16 @@ index c2fd9f8..c90bfb6 100644
    neterr:'AWTRIX nicht erreichbar',power:'Ein/Aus',brightness:'Helligkeit',prevapp:'Vorherige App',nextapp:'Nächste App',
    dismiss:'Benachrichtigung schließen',dismissed:'Benachrichtigung geschlossen',
    snap:'Screenshot speichern',rec:'GIF aufnehmen',recstop:'Aufnahme beenden, GIF speichern',
-@@ -3911,7 +3911,8 @@ function uploadZone(dir,accept,hint,onDone,asGif){
+@@ -3911,7 +3911,7 @@ function uploadZone(dir,accept,hint,onDone,asGif){
        list.append(row);
        try{
          const conv=asGif?await iconAsGif(f,f.name):null;
 -        const nm=conv?conv.name:f.name;
-+        const nm=conv?conv.name:dir===MP3_DIR?mp3UploadName(f.name):f.name;
-+        if(dir===MP3_DIR)await checkMp3Space(f);
++        const nm=conv?conv.name:dir===MP3_DIR?await prepareMp3(f):f.name;
          await uploadFile(conv?conv.blob:f,dir,nm,p=>row.replaceChildren(nm+' - '+(p*100).toFixed(0)+'%'));
          if(conv)await dropStale(dir,f.name,nm);
          row.replaceChildren(nm+' ✓ '+t('uploaded'));
-@@ -3934,11 +3935,30 @@ async function validateIcon(file){
+@@ -3934,11 +3934,38 @@ async function validateIcon(file){
    if(!(w>0&&h>0&&w<=ICON_MAX&&h<=ICON_MAX_HEIGHT))
      throw new Error('Image must fit within '+ICON_MAX+'×'+ICON_MAX_HEIGHT+' pixels.');
  }
@@ -54,13 +55,21 @@ index c2fd9f8..c90bfb6 100644
 +  const base=name.replace(/\.mp3$/i,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,32);
 +  return (base||'track')+'.mp3';
 +}
-+// A refused upload is answered before the body is read, which a browser still sending can report
-+// as a dropped connection, so check the space first.
-+async function checkMp3Space(file){
++// Picks the upload name and checks the space first: a refused upload is answered before the body
++// is read, which a browser still sending can report as a dropped connection. The device replaces a
++// file of the same name, so a renamed upload gets a free name instead of replacing a different song.
++async function prepareMp3(file){
 +  const{data}=await api(MP3_DIR,{cache:'no-store'});
 +  const free=(data.totalBytes||0)-(data.usedBytes||0);
 +  if(data.totalBytes&&file.size>free)
 +    throw new Error(t('nospace')+' ('+fmtBytes(file.size)+' > '+fmtBytes(Math.max(free,0))+')');
++  const name=mp3UploadName(file.name);
++  if(name===file.name)return name;
++  const taken=new Set((data.files||[]).map(f=>f.name));
++  const base=name.slice(0,-4);
++  let nm=name;
++  for(let i=2;taken.has(nm);i++){const sfx='_'+i;nm=base.slice(0,32-sfx.length)+sfx+'.mp3';}
++  return nm;
 +}
  async function uploadFile(file,dir,name,onProgress){
    if(dir==='/ICONS')await validateIcon(file);
@@ -75,7 +84,7 @@ index c2fd9f8..c90bfb6 100644
    assetRev++;
  }
  async function delFile(path){
-@@ -4894,7 +4914,7 @@ function mp3Section(){
+@@ -4894,7 +4921,7 @@ function mp3Section(){
  
    reload();
    const nodes=[
