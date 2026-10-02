@@ -104,7 +104,19 @@ instead if the clock was installed with `--allow-unverified`, or if it runs a re
   the clock has opened its own access point (`awtrixng-…`); it retries your network every two
   minutes, or you can join the access point and set Wi-Fi at `http://192.168.4.1`.
 - A power cut during the write leaves a partition that needs the stock bootloader's own update
-  path or a serial connection; that has never been exercised. Do not unplug during the write.
+  path: Ulanzi's USB recovery below, or a serial connection. Do not unplug during the write.
+
+### Ulanzi's USB recovery
+
+Ulanzi's procedure reinstalls the stock firmware without the network. It has not been tried with
+this port yet.
+
+1. Prepare a 16 GB USB drive and format it as FAT32.
+2. Place the upgrade files and `zkautoupgrade` in the root directory of the USB drive.
+3. With the base unit powered via the pin connector, power on the device, then insert the USB
+   drive into the left-side USB-C port and wait for the device to restart and recover.
+4. Once the device restarts and the "Ulanzi" logo appears, remove the USB drive. The device
+   should return to normal.
 
 ## Risks
 

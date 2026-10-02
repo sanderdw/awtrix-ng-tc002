@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
 Date: Fri, 25 Sep 2026 23:39:49 +0200
-Subject: [PATCH 10/10] script: make the host script heap budget a build-time
+Subject: [PATCH 10/11] script: make the host script heap budget a build-time
  setting
 
 A port whose host has memory to spare (the Ulanzi TC002 runs AWTRIX with 12 to 15 MB

@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: awtrix-ng-tc002 <port@awtrix-ng-tc002.invalid>
+Date: Fri, 2 Oct 2026 13:10:09 +0200
+Subject: [PATCH 11/11] webui: rename MP3 uploads to a valid name and show the
+ device's refusal
+
+The device addresses MP3s by name and only takes 1-32 of A-Z, a-z, 0-9, _
+and -, so a file such as "Alyssa Reid - High.mp3" was refused. The device
+answers before reading the body, which a browser still sending reports as a
+dropped connection: the upload showed "Device not reachable". The upload
+zone now renames MP3s to a valid name, checks the free space first, and any
+refused upload shows the device's error message instead of the HTTP status.
+
+diff --git a/webui/index.html b/webui/index.html
+index c2fd9f8..c90bfb6 100644
+--- a/webui/index.html
++++ b/webui/index.html
+@@ -930,7 +930,7 @@ const I18N={en:{
+   cfgWarnH:'The script’s settings header has a problem. Fix it in the editor.',
+   save:'Save',saved:'Saved',sure:'Sure?',cancel:'Cancel',del:'Delete',edit:'Edit',
+   discard:'Discard',unsaved:'unsaved changes',choose:'Choose file…',
+-  preview:'Show on AWTRIX',upload:'Upload',uploaded:'uploaded',
++  preview:'Show on AWTRIX',upload:'Upload',uploaded:'uploaded',nospace:'Not enough free space on the device',
+   neterr:'Device not reachable',power:'Power',brightness:'Brightness',prevapp:'Previous app',nextapp:'Next app',
+   dismiss:'Dismiss notification',dismissed:'Notification dismissed',
+   snap:'Save screenshot',rec:'Record GIF',recstop:'Stop recording, save GIF',
+@@ -1119,7 +1119,7 @@ const I18N={en:{
+   cfgWarnH:'Der Einstellungs-Kopf des Skripts hat einen Fehler. Im Editor beheben.',
+   save:'Speichern',saved:'Gespeichert',sure:'Sicher?',cancel:'Abbrechen',del:'Löschen',edit:'Bearbeiten',
+   discard:'Verwerfen',unsaved:'ungespeicherte Änderungen',choose:'Datei wählen…',
+-  preview:'Auf AWTRIX zeigen',upload:'Hochladen',uploaded:'hochgeladen',
++  preview:'Auf AWTRIX zeigen',upload:'Hochladen',uploaded:'hochgeladen',nospace:'Nicht genug freier Speicher auf dem Gerät',
+   neterr:'AWTRIX nicht erreichbar',power:'Ein/Aus',brightness:'Helligkeit',prevapp:'Vorherige App',nextapp:'Nächste App',
+   dismiss:'Benachrichtigung schließen',dismissed:'Benachrichtigung geschlossen',
+   snap:'Screenshot speichern',rec:'GIF aufnehmen',recstop:'Aufnahme beenden, GIF speichern',
+@@ -3911,7 +3911,8 @@ function uploadZone(dir,accept,hint,onDone,asGif){
+       list.append(row);
+       try{
+         const conv=asGif?await iconAsGif(f,f.name):null;
+-        const nm=conv?conv.name:f.name;
++        const nm=conv?conv.name:dir===MP3_DIR?mp3UploadName(f.name):f.name;
++        if(dir===MP3_DIR)await checkMp3Space(f);
+         await uploadFile(conv?conv.blob:f,dir,nm,p=>row.replaceChildren(nm+' - '+(p*100).toFixed(0)+'%'));
+         if(conv)await dropStale(dir,f.name,nm);
+         row.replaceChildren(nm+' ✓ '+t('uploaded'));
+@@ -3934,11 +3935,30 @@ async function validateIcon(file){
+   if(!(w>0&&h>0&&w<=ICON_MAX&&h<=ICON_MAX_HEIGHT))
+     throw new Error('Image must fit within '+ICON_MAX+'×'+ICON_MAX_HEIGHT+' pixels.');
+ }
++const MP3_DIR='/api/v1/audio/mp3';
++// MP3s are addressed by name in the API, so the device only takes 1-32 of A-Z, a-z, 0-9, _ and -.
++// Rename here rather than have "My Song (live).mp3" refused.
++function mp3UploadName(name){
++  const base=name.replace(/\.mp3$/i,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,32);
++  return (base||'track')+'.mp3';
++}
++// A refused upload is answered before the body is read, which a browser still sending can report
++// as a dropped connection, so check the space first.
++async function checkMp3Space(file){
++  const{data}=await api(MP3_DIR,{cache:'no-store'});
++  const free=(data.totalBytes||0)-(data.usedBytes||0);
++  if(data.totalBytes&&file.size>free)
++    throw new Error(t('nospace')+' ('+fmtBytes(file.size)+' > '+fmtBytes(Math.max(free,0))+')');
++}
+ async function uploadFile(file,dir,name,onProgress){
+   if(dir==='/ICONS')await validateIcon(file);
+   const url=dir.startsWith('/api/')?dir:'/api/v1/files?dir='+encodeURIComponent(dir);
+   const x=await xhrPost(url,'file',file,name,onProgress);
+-  if(x.status>=300)throw new Error('HTTP '+x.status);
++  if(x.status>=300){
++    let msg='HTTP '+x.status;
++    try{const e=JSON.parse(x.responseText).error;msg=(e&&e.message)||(typeof e==='string'&&e)||msg;}catch(e){}
++    throw new Error(msg);
++  }
+   assetRev++;
+ }
+ async function delFile(path){
+@@ -4894,7 +4914,7 @@ function mp3Section(){
+ 
+   reload();
+   const nodes=[
+-    uploadZone('/api/v1/audio/mp3','.mp3,audio/mpeg','⬆ '+t('upload')+' (.mp3)',reload,false),
++    uploadZone(MP3_DIR,'.mp3,audio/mpeg','⬆ '+t('upload')+' (.mp3)',reload,false),
+     list];
+   return{nodes,mark,storSlot};
+ }

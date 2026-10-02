@@ -788,3 +788,35 @@ known: nothing polled between 06:28 and 07:46, and whether the owner power-cycle
 The earlier installs came back in one to two minutes, so a slow return after the write is worth
 watching on the next install. Not checked: audible MP3 output, cold boot, knob-hold and
 three-strikes fallbacks.
+
+## 2026-10-02: MP3 upload names; workers held by idle keep-alive connections
+
+On 1.1.2-tc002.4 (85b82c2), on 192.168.100.190.
+
+**Upload names.** Every song name in the owner's library (`Alyssa Reid - High.mp3`, 571 of 571
+in one folder) fails `uploadNameOk`. `handleMp3Upload` refuses after the first multipart part, before
+reading the body, and the owner's browser reported that as a network error: *Device not
+reachable*. Patch 0011 renames MP3s in the upload zone (`Alyssa_Reid_-_High.mp3`, at most 32
+characters), checks the free space first and shows the device's error text. Checked in Chrome
+against the host build with the owner's files: renamed, shortened, and a third song refused with
+*Not enough free space*. `test_upstream_tracking.py` now allows 11 patches.
+
+**Workers held by idle connections.** With 0011 flashed, an upload still showed the toast,
+although the file arrived whole (3,997,847 B, logged 14 s after boot). Reproduced in Chrome on the
+installed build, with fetch and XHR instrumented: requests took 5038, 5058 and 10057 ms, and
+`/api/v1/capabilities` was aborted at 12 s, all multiples of `set_keep_alive_timeout(5)`. httplib
+0.20 keeps a worker on a connection while `keep_alive()` waits for its next request, and
+`CPPHTTPLIB_THREAD_POOL_COUNT=2`, so one upload plus one idle browser connection queued everything
+else. Now four workers and a 1 s keep-alive. The new
+`test_idle_browser_connections_do_not_starve_requests` (an upload in progress, two idle
+connections, then one request under 2 s) fails on the old settings and passes. RAM trial: a
+throttled 13.6 s upload while the Audio page reloaded and changed views: 31 requests, the slowest
+1045 ms, no toast.
+
+**Trial left the clock dark.** At the end of that trial, `tools/trial.py`'s
+`setprop ctl.start zkswe` failed: `adb shell` answered `error: closed` to every command, although
+`adb connect` succeeded and the clock answered ping. Nothing was listening on port 80 and the
+panel was black. One power cycle by the owner brought 1.1.2-tc002.4 back with settings intact.
+Cause not found. The trial's own `trap 'setprop ctl.start zkswe' EXIT` did not restart the
+service either. `trial.py` could retry the restart and say plainly that a power cycle is needed
+when it cannot.

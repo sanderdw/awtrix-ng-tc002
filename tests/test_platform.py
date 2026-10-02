@@ -198,6 +198,33 @@ def test_a_second_large_upload_is_refused_while_one_is_in_flight(app):
     assert {f['name'] for f in app('/api/v1/audio/mp3')['files']} == {'slow.mp3'}
 
 
+def test_idle_browser_connections_do_not_starve_requests(app):
+    # A browser keeps several keep-alive connections open, and each idle one holds a server worker
+    # until the keep-alive timeout. During an MP3 upload the web UI's requests queued behind them
+    # in 5 s steps until one passed its 12 s timeout: "Device not reachable".
+    boundary = 'awtrix-slow-upload'
+    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="slow.mp3"\r\n'
+            f'Content-Type: audio/mpeg\r\n\r\n').encode() + MPEG1 + bytes(300000) + f'\r\n--{boundary}--\r\n'.encode()
+    head = (f'POST /api/v1/audio/mp3 HTTP/1.1\r\nHost: clock\r\nContent-Type: multipart/form-data; boundary={boundary}\r\n'
+            f'Content-Length: {len(body)}\r\n\r\n').encode()
+    idle = []
+    with socket.create_connection(('127.0.0.1', app.port), timeout=10) as upload:
+        upload.sendall(head + body[:2000])   # an upload in progress holds one worker
+        time.sleep(0.2)
+        for _ in range(2):                    # the page's earlier requests, now idle
+            s = socket.create_connection(('127.0.0.1', app.port), timeout=10)
+            s.sendall(b'GET /api/v1/version HTTP/1.1\r\nHost: clock\r\n\r\n')
+            assert b' 200 ' in s.recv(4096)
+            idle.append(s)
+        start = time.time()
+        assert app('/api/v1/version')['version']
+        assert time.time() - start < 2, f'request waited {time.time() - start:.1f} s for a worker'
+        upload.sendall(body[2000:])
+        assert int(upload.recv(4096).split(b' ')[1]) == 200
+    for s in idle:
+        s.close()
+
+
 def test_vendor_status_lists_the_files_the_port_depends_on(app):
     status = app('/api/v1/tc002/vendor')
     # The stock build the hashes were recorded from, not the clock's own version.

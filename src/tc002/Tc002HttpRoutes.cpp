@@ -401,9 +401,11 @@ SimHttpExtension tc002HttpExtension(SimHttpServer& server, Tc002Board& board, De
       }
       return httplib::Server::HandlerResponse::Unhandled;
     });
-    // Two worker threads serve the clock; idle keep-alive connections must not hold them.
+    // Four worker threads serve the clock, and httplib keeps one on each connection until its
+    // keep-alive timeout. A browser holds several connections open, so with an MP3 upload taking
+    // one worker, a 5 s idle hold queued the web UI's requests past their 12 s timeout.
     svr.set_keep_alive_max_count(20);
-    svr.set_keep_alive_timeout(5);
+    svr.set_keep_alive_timeout(1);
     svr.set_read_timeout(5, 0);
     svr.set_write_timeout(10, 0);
     svr.Post("/api/v1/audio/mp3", [&server, &cfg](const httplib::Request& req, httplib::Response& res,
