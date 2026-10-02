@@ -825,3 +825,20 @@ panel was black. One power cycle by the owner brought 1.1.2-tc002.4 back with se
 Cause not found. The trial's own `trap 'setprop ctl.start zkswe' EXIT` did not restart the
 service either. `trial.py` could retry the restart and say plainly that a power cycle is needed
 when it cannot.
+
+## 2026-10-02: MP3 upload-name collisions fixed and installed on 192.168.100.190
+
+Commit 192f4e7, version still 1.1.2-tc002.4 (the build is told apart by `prepareMp3` in the served
+web UI, not by version). Stock app 1.1.1, MCU V1.0.17.
+
+- RAM trial, 120 s: `capabilities` showed the fixed 52 × 16 matrix, `mp3` and `buzzer`. On the real
+  Audio page, uploading `webui-check_a_b.mp3`, `webui-check a b.mp3`, `webui-check_a_b.mp3` left
+  `webui-check_a_b.mp3` and `webui-check_a_b_2.mp3`, with no JavaScript errors. No crash in the trial
+  log. This time the trial restored the installed service by itself.
+- Install: all three vendor files verified, preflight passed, and the clock came back by itself
+  reporting 1.1.2-tc002.4, serving `prepareMp3`, `fps` 40, `updateImage` "". Settings were
+  byte-identical. The pushed `temperature` app kept its slot but was not present until its sender
+  pushes it again (pushed apps are not persisted). `restore-stock.img` is under
+  `~/.awtrix-ng-tc002/192.168.100.190/20261002-160207/`.
+- Not checked: the panel and buzzer by eye, a cold boot, choosing several files at once in the
+  upload picker (only the first uploads: upstream clears the live `FileList` while the loop awaits).
