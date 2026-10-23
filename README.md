@@ -5,12 +5,12 @@ to the Ulanzi TC002's **52 × 16** pixel clock. It runs the upstream apps, rende
 HTTP API, MQTT interface and web UI natively on the clock.
 
 > [!NOTE]
-> **Official AWTRIX firmware for the TC002 is on its way from Blueforcer**, including work on the
-> underlying Linux system. This port started when no official support was planned, and I am happy
+> **Official AWTRIX firmware for the TC002 is now Available!
+>
+> This port started when no official support was planned, and I am happy
 > to see that change.
 >
-> **I will keep supporting this port until the official TC002 version is released.** Current users
-> can then [restore the stock application](docs/INSTALL.md#going-back-to-stock) and follow the
+> Current users can then [restore the stock application](docs/INSTALL.md#going-back-to-stock) and follow the
 > official installation instructions when available.
 >
 > Ulanzi featured this project on its website and in its newsletter, but I have never had contact
@@ -45,11 +45,12 @@ and follow [docs/TRY-IT.md](docs/TRY-IT.md).
 
 ## Supported firmware
 
-| | Status |
-|---|---|
-| Clock | Ulanzi TC002 |
-| Stock app | **1.1.1** validated; 1.0.1 and 1.0.8 reported working |
-| MCU firmware | **V1.0.17** validated; V1.0.16 reported working |
+
+|              | Status                                                |
+| ------------ | ----------------------------------------------------- |
+| Clock        | Ulanzi TC002                                          |
+| Stock app    | **1.1.1** validated; 1.0.1 and 1.0.8 reported working |
+| MCU firmware | **V1.0.17** validated; V1.0.16 reported working       |
 
 The installer checks your clock's Ulanzi files before it flashes. The audio and network libraries
 must be a known build; the Ulanzi application is accepted when it is a known build (**verified**) or
